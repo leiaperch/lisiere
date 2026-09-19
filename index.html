@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Lisière · une balade du coucher du soleil à la nuit</title>
+    <meta name="description" content="Démo WebGL : une balade en forêt de 19 h 40 à 21 h 10, du soleil rasant aux lucioles. Relief, forêt, lumière, son et interface entièrement générés dans le navigateur." />
+    <meta name="theme-color" content="#1b1712" />
+    <meta property="og:title" content="Lisière · balade en forêt, du coucher du soleil à la nuit" />
+    <meta property="og:description" content="Une forêt, un sentier, une heure et demie de lumière. Aucune image, aucun modèle, aucun son enregistré : tout est calculé en direct." />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%231b1712'/><path d='M4 22c6-1 8-6 12-6s6 5 12 6' stroke='%23f0c890' stroke-width='2' fill='none'/></svg>" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,300;6..72,400&family=Hanken+Grotesk:wght@400;500&family=Caveat:wght@500&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <a class="skip" href="#apropos">Aller à la présentation de la démo</a>
+
+    <div class="stage" id="stage" aria-hidden="true"></div>
+    <div class="scrim" aria-hidden="true"></div>
+
+    <!-- chargement : le profil du sentier se dessine, puis devient l'horizon -->
+    <div class="loader" id="loader" role="status" aria-live="polite">
+      <svg class="loader-line" viewBox="0 0 1000 200" preserveAspectRatio="none" aria-hidden="true">
+        <path id="loader-path" d="" />
+      </svg>
+      <p class="loader-title">Lisière</p>
+      <p class="loader-step"><span id="loader-label">Relief et sentier</span> <span id="loader-pct">0</span> %</p>
+    </div>
+
+    <header class="head">
+      <a class="mark" href="#top">Lisière</a>
+      <p class="clock"><span id="clock">19 h 40</span><span class="temp" id="temp">21 °C</span></p>
+      <button class="sound" id="sound" aria-pressed="false">
+        <span class="bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+        <span class="sound-label">Son</span>
+      </button>
+    </header>
+
+    <main id="top">
+      <!-- longueur de la balade : le défilement fait avancer le promeneur -->
+      <section class="walk" id="walk" aria-label="La balade">
+        <div class="chapters" id="chapters">
+          <article class="chapter" data-from="0" data-to="0.19">
+            <p class="chapter-num">1 / 5</p>
+            <h1 class="chapter-title">Lisière</h1>
+            <p class="chapter-text">Le soleil touche la cime des pins. On quitte la prairie par le sentier qui descend vers le lac.</p>
+          </article>
+          <article class="chapter" data-from="0.19" data-to="0.39">
+            <p class="chapter-num">2 / 5</p>
+            <h2 class="chapter-title">Sous-bois</h2>
+            <p class="chapter-text">Sous les arbres, la lumière arrive en biais et découpe la brume. L'air sent la résine.</p>
+          </article>
+          <article class="chapter" data-from="0.39" data-to="0.6">
+            <p class="chapter-num">3 / 5</p>
+            <h2 class="chapter-title">La clairière</h2>
+            <p class="chapter-text">Le soleil a quitté le sol. Il tient encore dans les herbes hautes, pour quelques minutes.</p>
+          </article>
+          <article class="chapter" data-from="0.6" data-to="0.84">
+            <p class="chapter-num">4 / 5</p>
+            <h2 class="chapter-title">Heure bleue</h2>
+            <p class="chapter-text">Les couleurs s'éteignent, les lucioles s'allument. Promenez le curseur : la lanterne éclaire le chemin.</p>
+          </article>
+          <article class="chapter" data-from="0.84" data-to="1.01">
+            <p class="chapter-num">5 / 5</p>
+            <h2 class="chapter-title">Le lac</h2>
+            <p class="chapter-text">La lune se lève derrière les pins et trace un chemin sur l'eau. Fin de la balade.</p>
+          </article>
+        </div>
+      </section>
+
+      <!-- carnet de terrain : une ligne s'écrit à chaque chapitre -->
+      <aside class="notebook" id="notebook" aria-live="polite">
+        <p class="notebook-head">Carnet</p>
+        <ol id="notes"></ol>
+      </aside>
+
+      <!-- profil du sentier : où en est la balade -->
+      <figure class="profile" aria-label="Profil du sentier">
+        <svg viewBox="0 0 300 60" preserveAspectRatio="none" aria-hidden="true">
+          <path class="profile-line" id="profile-line" d="" />
+          <path class="profile-done" id="profile-done" d="" />
+          <circle class="profile-dot" id="profile-dot" r="3.2" cx="0" cy="30" />
+        </svg>
+        <figcaption><span id="profile-km">0,0 km</span> · <span id="profile-alt">312 m</span></figcaption>
+      </figure>
+
+      <p class="hint" id="hint">Faites défiler pour marcher</p>
+
+      <section class="about" id="apropos" aria-labelledby="about-title">
+        <div class="about-inner">
+          <p class="about-kicker">À propos de cette démo</p>
+          <h2 id="about-title">Une forêt entière, sans une seule image.</h2>
+          <p class="about-lede">Le relief, 2 600 arbres, jusqu'à 52 000 brins d'herbe, le ciel, le lac et l'ambiance sonore sont calculés dans le navigateur. La page ne télécharge ni modèle 3D, ni texture, ni fichier audio.</p>
+          <dl class="about-grid">
+            <div><dt>Lumière</dt><dd>Cinq états de lumière entre 19 h 40 et 21 h 10, interpolés en continu : direction et couleur du soleil, ciel, brouillard, étalonnage.</dd></div>
+            <div><dt>Matière</dt><dd>Feuillage et herbe éclairés par transparence à contre-jour, ombres longues peintes au sol, brouillard plus dense au ras du sol qui se dore vers le soleil.</dd></div>
+            <div><dt>Mouvement</dt><dd>Caméra à hauteur d'yeux, pas et regard par chapitre, vent en rafales dans l'herbe et les arbres, respiration de l'objectif entre deux chapitres.</dd></div>
+            <div><dt>Son</dt><dd>Vent, oiseaux, grillons, chouette et clapotis synthétisés avec Web Audio. Chaque couche suit l'heure de la balade.</dd></div>
+            <div><dt>Page</dt><dd>Le chargement dessine le profil du sentier, l'interface prend la couleur de l'heure, le carnet s'écrit au fil des chapitres.</dd></div>
+            <div><dt>Mesures</dt><dd><span data-live="trees">–</span> arbres, <span data-live="blades">–</span> brins d'herbe, <span data-live="calls">–</span> appels de dessin par image, <span data-live="fps">–</span> images/s.</dd></div>
+          </dl>
+          <p class="about-stack">Three.js, GLSL, GSAP, Web Audio, TypeScript, Vite.</p>
+          <div class="about-cta">
+            <a class="btn" href="https://www.malt.fr/profile/leiapercherancier" target="_blank" rel="noopener">Me contacter sur Malt</a>
+            <a class="link" href="#top">Refaire la balade</a>
+          </div>
+          <p class="about-credit">Leia Percherancier, développeuse front-end 3D.</p>
+        </div>
+      </section>
+    </main>
+
+    <div class="cursor" id="cursor" aria-hidden="true"><i class="cursor-dot"></i><i class="cursor-glow"></i></div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
