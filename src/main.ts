@@ -1,13 +1,10 @@
 import './styles.css';
 import gsap from 'gsap';
-import { SplitText } from 'gsap/SplitText';
 import * as THREE from 'three';
 import { World } from './world/world';
 import { state } from './world/light';
 import { TRAIL, heightAt, trailPoint } from './world/terrain';
 import { Ambience } from './sound';
-
-gsap.registerPlugin(SplitText);
 
 const $ = <T extends HTMLElement>(s: string) => document.querySelector<T>(s)!;
 const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -84,64 +81,43 @@ async function boot() {
   setupMetrics(world);
 }
 
-// ───────── défilement → marche, chapitres, carnet, profil, horloge ─────────
+// ───────── défilement → marche, carnet, profil, horloge ─────────
+// Cinq étapes, qui ne s'affichent pas en grands titres : elles déclenchent la respiration de
+// l'objectif, la note du carnet et l'annonce pour les lecteurs d'écran.
+const STEPS = [
+  { to: 0.19, name: 'Lisière' },
+  { to: 0.39, name: 'Sous-bois' },
+  { to: 0.6, name: 'La clairière' },
+  { to: 0.84, name: 'Heure bleue' },
+  { to: 1.01, name: 'Le lac' },
+];
+
 function setupWalk(world: World) {
-  const walk = $('#walk');
-  const chapters = [...document.querySelectorAll<HTMLElement>('.chapter')];
-  const splits = chapters.map((c) => {
-    const title = c.querySelector('.chapter-title')!;
-    const text = c.querySelector('.chapter-text')!;
-    const st = new SplitText(title, { type: 'chars,lines', mask: 'lines', linesClass: 'line-mask' });
-    const sx = new SplitText(text, { type: 'lines', mask: 'lines', linesClass: 'line-mask' });
-    return { title: st, text: sx, num: c.querySelector('.chapter-num')! };
-  });
-  let active = -1;
-  let seenNotes = 0;
+  const walkSection = $('#walk');
   const notes = $('#notes');
+  const live = $('#chapter-live');
+  let active = -1;
 
   const show = (i: number) => {
     if (i === active) return;
-    const prev = active;
+    const first = active < 0;
     active = i;
-    if (prev >= 0) {
-      const p = splits[prev];
-      gsap.to([p.title.chars, p.text.lines, p.num], {
-        yPercent: -110,
-        opacity: 0,
-        duration: 0.5,
-        ease: 'power2.in',
-        stagger: 0.012,
-        onComplete: () => {
-          if (active !== prev) chapters[prev].classList.remove('on');
-        },
-      });
-    }
-    chapters[i].classList.add('on');
-    const s = splits[i];
-    gsap.killTweensOf([s.title.chars, s.text.lines, s.num]);
-    gsap.fromTo(s.num, { yPercent: 100, opacity: 0 }, { yPercent: 0, opacity: 1, duration: 0.8, ease: 'power3.out', delay: 0.25 });
-    gsap.fromTo(s.title.chars, { yPercent: 115, opacity: 1 }, { yPercent: 0, opacity: 1, duration: 1.1, ease: 'expo.out', stagger: 0.035, delay: 0.3 });
-    gsap.fromTo(s.text.lines, { yPercent: 105, opacity: 0 }, { yPercent: 0, opacity: 1, duration: 1, ease: 'power3.out', stagger: 0.08, delay: 0.55 });
-    if (prev >= 0 && !reduced) world.breathe();
-
-    // le carnet garde la trace de chaque chapitre atteint, écrit à la main
-    while (seenNotes <= i) {
-      const n = NOTES[seenNotes];
-      const li = document.createElement('li');
-      li.innerHTML = `${clockText(state.clock)} · ${n.species}<small>${n.place}, ${Math.round(state.temperature)} °C</small>`;
-      notes.append(li);
-      gsap.to(li, { clipPath: 'inset(0 0% 0 0)', duration: reduced ? 0 : 1.6, ease: 'none', delay: 0.6 + (i - seenNotes) * 0.2 });
-      notes.querySelectorAll('li').forEach((el, k, all) => el.classList.toggle('past', k < all.length - 1));
-      seenNotes++;
-    }
+    live.textContent = `Étape ${i + 1} sur 5, ${STEPS[i].name}`;
+    if (!first && !reduced) world.breathe();
+    const n = NOTES[i];
+    const li = document.createElement('li');
+    li.innerHTML = `${clockText(state.clock)} · ${n.species}<small>${n.place}, ${Math.round(state.temperature)} °C</small>`;
+    notes.append(li);
+    gsap.to(li, { clipPath: 'inset(0 0% 0 0)', duration: reduced ? 0 : 1.6, ease: 'none', delay: 0.4 });
+    notes.querySelectorAll('li').forEach((el, k, all) => el.classList.toggle('past', k < all.length - 1));
+    while (notes.children.length > 5) notes.firstElementChild!.remove();
   };
 
   const progress = () => {
-    const max = walk.offsetHeight - window.innerHeight;
+    const max = walkSection.offsetHeight - window.innerHeight;
     const u = THREE.MathUtils.clamp(window.scrollY / Math.max(max, 1), 0, 1);
     world.setProgress(u);
     if (window.scrollY > 40) $('#hint').classList.add('gone');
-    return u;
   };
   window.addEventListener('scroll', progress, { passive: true });
   progress();
@@ -161,11 +137,11 @@ function setupWalk(world: World) {
   const root = document.documentElement.style;
   const tint = new THREE.Color();
   const shade = new THREE.Color();
+  const white = new THREE.Color('#ffffff');
   let frame = 0;
 
   world.onFrame = (t) => {
-    // chapitre en cours
-    const i = chapters.findIndex((c) => t >= Number(c.dataset.from) && t < Number(c.dataset.to));
+    const i = STEPS.findIndex((s) => t < s.to);
     if (i >= 0) show(i);
     if (frame++ % 3) return;
 
@@ -180,7 +156,7 @@ function setupWalk(world: World) {
     temp.textContent = `${Math.round(state.temperature)} °C`;
 
     // l'interface prend la lumière du moment : traits dorés au coucher, bleutés la nuit
-    tint.copy(state.skyHorizon).lerp(new THREE.Color('#ffffff'), 0.35);
+    tint.copy(state.skyHorizon).lerp(white, 0.35);
     shade.copy(state.grade).multiplyScalar(0.8);
     root.setProperty('--tint', `#${tint.getHexString()}`);
     root.setProperty('--shade', `rgba(${Math.round(shade.r * 255)}, ${Math.round(shade.g * 255)}, ${Math.round(shade.b * 255)}, 0.6)`);
@@ -211,7 +187,9 @@ function setupCursor() {
   });
 }
 
-// ───────── son ─────────
+// ───────── son et rencontres ─────────
+const HOVER_LABELS = { bird: 'ils vont partir', flower: 'souffler', water: 'ricochet' } as const;
+
 function setupSound(world: World) {
   const amb = new Ambience();
   const btn = $('#sound');
@@ -224,6 +202,17 @@ function setupSound(world: World) {
     prev?.(t);
     amb.setProgress(t);
   };
+
+  // chaque rencontre a son bruit, et le curseur annonce ce qui va se passer
+  const cursor = $('#cursor');
+  const label = $('#cursor-label');
+  world.onHover = (what) => {
+    cursor.classList.toggle('acts', !!what);
+    if (what) label.textContent = HOVER_LABELS[what];
+  };
+  world.onBirds = () => amb.flutter();
+  world.onBlow = () => amb.puff();
+  world.onSplash = () => amb.plop();
 }
 
 // ───────── mesures affichées en fin de page ─────────

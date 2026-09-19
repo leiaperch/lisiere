@@ -73,11 +73,18 @@ export function createFireflies(count = 420) {
       uniform float uTime;
       uniform float uAmount;
       uniform float uPixel;
+      uniform vec4 uLantern;
       varying float vGlow;
       void main(){
         vec3 p = position;
         float t = uTime * (0.25 + aSeed.x * 0.3);
         p += vec3(sin(t + aSeed.y * 20.0), sin(t * 1.3 + aSeed.x * 11.0) * 0.5, cos(t * 0.8 + aSeed.y * 7.0)) * 0.9;
+        // celles qui sont proches de la lanterne viennent tourner autour
+        vec3 toL = uLantern.xyz - p;
+        float pull = clamp(uLantern.w / 3.2, 0.0, 1.0) * (1.0 - smoothstep(2.0, 11.0, length(toL)));
+        float ang = uTime * (0.6 + aSeed.x) + aSeed.y * 6.28;
+        vec3 orbit = vec3(cos(ang), sin(ang * 0.7) * 0.4, sin(ang)) * (0.5 + aSeed.x * 0.9);
+        p = mix(p, uLantern.xyz + orbit, pull * 0.85);
         // chaque luciole s'allume à son rythme, et seulement quand la nuit tombe
         float blink = smoothstep(0.1, 0.9, sin(uTime * (0.8 + aSeed.x) + aSeed.y * 40.0));
         vGlow = blink * step(aSeed.x, uAmount);
@@ -101,7 +108,12 @@ export function createFireflies(count = 420) {
 }
 
 // Lac : miroir (rendu en demi-résolution, seulement quand il est à l'écran), rides et lune
-export function createLake(pixelRatio: number) {
+export interface Lake {
+  mesh: THREE.Mesh;
+  ripple: (x: number, z: number, time: number) => void;
+}
+
+export function createLake(pixelRatio: number): Lake {
   const geo = new THREE.CircleGeometry(LAKE.radius * 1.35, 96);
   const reflector = new Reflector(geo, {
     textureWidth: Math.round(window.innerWidth * pixelRatio * 0.5),
@@ -114,7 +126,9 @@ export function createLake(pixelRatio: number) {
 
   // le shader d'origine est remplacé : rides, fresnel, brouillard, lune
   const mat = reflector.material as THREE.ShaderMaterial;
-  mat.uniforms = { ...mat.uniforms, ...world };
+  // jusqu'à 6 ricochets en même temps : x, z, instant, force
+  const ripples = Array.from({ length: 6 }, () => new THREE.Vector4(0, 0, -100, 0));
+  mat.uniforms = { ...mat.uniforms, ...world, uRipples: { value: ripples } };
   mat.vertexShader = /* glsl */ `
     uniform mat4 textureMatrix;
     varying vec4 vUv;
@@ -129,6 +143,7 @@ export function createLake(pixelRatio: number) {
     ${glslNoise}
     ${glslWorld}
     uniform sampler2D tDiffuse;
+    uniform vec4 uRipples[6];
     varying vec4 vUv;
     varying vec3 vWorld;
     void main(){
@@ -138,6 +153,19 @@ export function createLake(pixelRatio: number) {
       float r1 = vnoise(q + vec2(uTime * 0.15, uTime * 0.08));
       float r2 = vnoise(q * 2.3 - vec2(uTime * 0.11, -uTime * 0.13));
       vec2 ripple = (vec2(r1, r2) - 0.5) * 0.035;
+      // ricochets : anneaux qui s'élargissent et s'amortissent
+      float crest = 0.0;
+      for (int i = 0; i < 6; i++) {
+        vec4 r = uRipples[i];
+        float age = uTime - r.z;
+        if (age < 0.0 || age > 6.0) continue;
+        vec2 d = vWorld.xz - r.xy;
+        float dist = length(d);
+        float front = dist - age * 2.6;
+        float wave = sin(front * 7.0) * exp(-abs(front) * 1.4) * exp(-age * 0.7) * r.w;
+        ripple += normalize(d + 1e-4) * wave * 0.06;
+        crest += max(wave, 0.0);
+      }
       vec4 uv = vUv;
       uv.xy += ripple * uv.w;
       vec3 refl = texture2DProj(tDiffuse, uv).rgb;
@@ -150,9 +178,18 @@ export function createLake(pixelRatio: number) {
       col += vec3(0.9, 0.92, 1.0) * glint * uMoon * 2.2;
       float sglint = pow(max(dot(r, uSunDir), 0.0), 120.0);
       col += uSunColor * sglint * 0.8;
+      // les crêtes des ondes accrochent la lumière du ciel
+      col += (uSkyHorizon * 0.6 + vec3(0.6, 0.65, 0.8) * uMoon) * crest * 0.35;
       col = applyFog(col, vWorld, cameraPosition);
       gl_FragColor = vec4(col, 1.0);
     }`;
   mat.needsUpdate = true;
-  return reflector;
+  let next = 0;
+  return {
+    mesh: reflector,
+    ripple(x, z, time) {
+      ripples[next].set(x, z, time, 1);
+      next = (next + 1) % ripples.length;
+    },
+  };
 }

@@ -86,6 +86,10 @@ button { font: inherit; color: inherit; }
 .cursor { position: fixed; z-index: 60; left: 0; top: 0; pointer-events: none; }
 .cursor-dot { position: absolute; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; background: var(--ink); transition: transform 0.3s var(--ease); }
 .cursor-glow { position: absolute; width: 300px; height: 300px; margin: -150px 0 0 -150px; border-radius: 50%; background: radial-gradient(circle, rgba(255, 196, 120, 0.22), rgba(255, 170, 90, 0.06) 45%, transparent 70%); opacity: var(--lantern, 0); mix-blend-mode: screen; }
+.cursor-label { position: absolute; left: 16px; top: -6px; white-space: nowrap; font-size: 12px; color: var(--ink); opacity: 0; transform: translateX(-4px); transition: opacity 0.25s var(--ease), transform 0.25s var(--ease); text-shadow: 0 1px 10px var(--shade); }
+.cursor.acts .cursor-label { opacity: 1; transform: none; }
+.cursor.acts .cursor-dot { transform: scale(1.8); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .cursor.link .cursor-dot { transform: scale(3.2); background: transparent; box-shadow: inset 0 0 0 1px var(--ink); }
 @media (hover: none), (pointer: coarse) { .cursor { display: none; } }
 

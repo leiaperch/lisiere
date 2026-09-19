@@ -39,35 +39,8 @@
 
     <main id="top">
       <!-- longueur de la balade : le défilement fait avancer le promeneur -->
-      <section class="walk" id="walk" aria-label="La balade">
-        <div class="chapters" id="chapters">
-          <article class="chapter" data-from="0" data-to="0.19">
-            <p class="chapter-num">1 / 5</p>
-            <h1 class="chapter-title">Lisière</h1>
-            <p class="chapter-text">Le soleil touche la cime des pins. On quitte la prairie par le sentier qui descend vers le lac.</p>
-          </article>
-          <article class="chapter" data-from="0.19" data-to="0.39">
-            <p class="chapter-num">2 / 5</p>
-            <h2 class="chapter-title">Sous-bois</h2>
-            <p class="chapter-text">Sous les arbres, la lumière arrive en biais et découpe la brume. L'air sent la résine.</p>
-          </article>
-          <article class="chapter" data-from="0.39" data-to="0.6">
-            <p class="chapter-num">3 / 5</p>
-            <h2 class="chapter-title">La clairière</h2>
-            <p class="chapter-text">Le soleil a quitté le sol. Il tient encore dans les herbes hautes, pour quelques minutes.</p>
-          </article>
-          <article class="chapter" data-from="0.6" data-to="0.84">
-            <p class="chapter-num">4 / 5</p>
-            <h2 class="chapter-title">Heure bleue</h2>
-            <p class="chapter-text">Les couleurs s'éteignent, les lucioles s'allument. Promenez le curseur : la lanterne éclaire le chemin.</p>
-          </article>
-          <article class="chapter" data-from="0.84" data-to="1.01">
-            <p class="chapter-num">5 / 5</p>
-            <h2 class="chapter-title">Le lac</h2>
-            <p class="chapter-text">La lune se lève derrière les pins et trace un chemin sur l'eau. Fin de la balade.</p>
-          </article>
-        </div>
-      </section>
+      <!-- longueur de la balade : le défilement fait avancer le promeneur -->
+      <section class="walk" id="walk" aria-label="La balade"></section>
 
       <!-- carnet de terrain : une ligne s'écrit à chaque chapitre -->
       <aside class="notebook" id="notebook" aria-live="polite">
@@ -86,6 +59,7 @@
       </figure>
 
       <p class="hint" id="hint">Faites défiler pour marcher</p>
+      <p class="sr-only" id="chapter-live" aria-live="polite"></p>
 
       <section class="about" id="apropos" aria-labelledby="about-title">
         <div class="about-inner">
@@ -95,9 +69,10 @@
           <dl class="about-grid">
             <div><dt>Lumière</dt><dd>Cinq états de lumière entre 19 h 40 et 21 h 10, interpolés en continu : direction et couleur du soleil, ciel, brouillard, étalonnage.</dd></div>
             <div><dt>Matière</dt><dd>Feuillage et herbe éclairés par transparence à contre-jour, ombres longues peintes au sol, brouillard plus dense au ras du sol qui se dore vers le soleil.</dd></div>
-            <div><dt>Mouvement</dt><dd>Caméra à hauteur d'yeux, pas et regard par chapitre, vent en rafales dans l'herbe et les arbres, respiration de l'objectif entre deux chapitres.</dd></div>
+            <div><dt>Mouvement</dt><dd>Caméra à hauteur d'yeux, regard qui suit le sentier, vent en rafales dans l'herbe et les arbres, respiration de l'objectif d'une étape à l'autre.</dd></div>
+            <div><dt>Rencontres</dt><dd>Les oiseaux s'envolent quand on approche, les pissenlits se défont au passage du curseur, les lucioles tournent autour de la lanterne, et un clic sur le lac fait des ricochets.</dd></div>
             <div><dt>Son</dt><dd>Vent, oiseaux, grillons, chouette et clapotis synthétisés avec Web Audio. Chaque couche suit l'heure de la balade.</dd></div>
-            <div><dt>Page</dt><dd>Le chargement dessine le profil du sentier, l'interface prend la couleur de l'heure, le carnet s'écrit au fil des chapitres.</dd></div>
+            <div><dt>Page</dt><dd>Le chargement dessine le profil du sentier, l'interface prend la couleur de l'heure, le carnet s'écrit au fil de la balade.</dd></div>
             <div><dt>Mesures</dt><dd><span data-live="trees">–</span> arbres, <span data-live="blades">–</span> brins d'herbe, <span data-live="calls">–</span> appels de dessin par image, <span data-live="fps">–</span> images/s.</dd></div>
           </dl>
           <p class="about-stack">Three.js, GLSL, GSAP, Web Audio, TypeScript, Vite.</p>
@@ -110,7 +85,7 @@
       </section>
     </main>
 
-    <div class="cursor" id="cursor" aria-hidden="true"><i class="cursor-dot"></i><i class="cursor-glow"></i></div>
+    <div class="cursor" id="cursor" aria-hidden="true"><i class="cursor-dot"></i><i class="cursor-glow"></i><span class="cursor-label" id="cursor-label"></span></div>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

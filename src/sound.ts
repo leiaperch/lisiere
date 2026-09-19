@@ -188,6 +188,83 @@ export class Ambience {
     hoot(now + 1.1, 0.9, 410);
   }
 
+  // ───────── bruits des rencontres ─────────
+
+  // envol : battements d'ailes, bruit filtré par bouffées, suivi de deux cris
+  flutter() {
+    const ctx = this.ctx;
+    if (!ctx || !this.enabled) return;
+    const now = ctx.currentTime;
+    const src = ctx.createBufferSource();
+    src.buffer = this.pinkNoise(1.2);
+    const f = ctx.createBiquadFilter();
+    f.type = 'bandpass';
+    f.frequency.value = 700;
+    f.Q.value = 0.7;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, now);
+    for (let i = 0; i < 9; i++) {
+      const t = now + i * 0.085;
+      g.gain.linearRampToValueAtTime(0.16 * (1 - i / 11), t + 0.02);
+      g.gain.linearRampToValueAtTime(0.02, t + 0.06);
+    }
+    g.gain.linearRampToValueAtTime(0, now + 0.95);
+    src.connect(f).connect(g).connect(this.layers.birds);
+    src.start(now);
+    src.stop(now + 1.2);
+    this.bird();
+    setTimeout(() => this.bird(), 260);
+  }
+
+  // souffle sur un pissenlit : petite bouffée d'air
+  puff() {
+    const ctx = this.ctx;
+    if (!ctx || !this.enabled) return;
+    const now = ctx.currentTime;
+    const src = ctx.createBufferSource();
+    src.buffer = this.pinkNoise(0.6);
+    const f = ctx.createBiquadFilter();
+    f.type = 'highpass';
+    f.frequency.setValueAtTime(900, now);
+    f.frequency.exponentialRampToValueAtTime(2600, now + 0.35);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(0.09, now + 0.05);
+    g.gain.exponentialRampToValueAtTime(0.0005, now + 0.5);
+    src.connect(f).connect(g).connect(this.layers.wind);
+    src.start(now);
+    src.stop(now + 0.6);
+  }
+
+  // ricochet : « ploc » grave qui monte, puis une trace d'eau
+  plop() {
+    const ctx = this.ctx;
+    if (!ctx || !this.enabled) return;
+    const now = ctx.currentTime;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(180, now);
+    o.frequency.exponentialRampToValueAtTime(680, now + 0.09);
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(0.22, now + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+    o.connect(g).connect(this.layers.water);
+    o.start(now);
+    o.stop(now + 0.25);
+    const src = ctx.createBufferSource();
+    src.buffer = this.pinkNoise(0.5);
+    const f = ctx.createBiquadFilter();
+    f.type = 'bandpass';
+    f.frequency.value = 1500;
+    const ng = ctx.createGain();
+    ng.gain.setValueAtTime(0.06, now);
+    ng.gain.exponentialRampToValueAtTime(0.0005, now + 0.35);
+    src.connect(f).connect(ng).connect(this.layers.water);
+    src.start(now);
+    src.stop(now + 0.4);
+  }
+
   private pinkNoise(seconds: number) {
     const ctx = this.ctx!;
     const buf = ctx.createBuffer(1, ctx.sampleRate * seconds, ctx.sampleRate);

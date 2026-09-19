@@ -1,13 +1,18 @@
 import * as THREE from 'three';
 import { KEYS, setDaylight, state, world } from './light';
-import { createTerrain, heightAt } from './terrain';
+import { LAKE, createTerrain, heightAt } from './terrain';
 import { createForest, paintGround, plantForest } from './forest';
 import { createGrass } from './grass';
-import { createFireflies, createLake, createSky } from './sky';
+import { createFireflies, createLake, createSky, type Lake } from './sky';
+import { Birds } from './fauna';
+import { Dandelions } from './flora';
 import { Post } from './post';
 import { Walk } from './walk';
 
-// Assemble la forêt, la lumière et la marche, et fait tourner le rendu.
+// Assemble la forêt, la lumière, la faune et la marche, et fait tourner le rendu.
+
+const { x: LAKE_X, z: LAKE_Z, level: LAKE_LEVEL } = LAKE;
+const LAKE_R = LAKE.radius * 1.3;
 
 export class World {
   readonly renderer: THREE.WebGLRenderer;
@@ -17,7 +22,16 @@ export class World {
   readonly post: Post;
   readonly stats = { frames: 0, triangles: 0, calls: 0, trees: 0, blades: 0 };
   private fireflies!: THREE.Points;
-  private lake!: THREE.Mesh;
+  private lake!: Lake;
+  private birds!: Birds;
+  private dandelions!: Dandelions;
+  private pointerRay: THREE.Ray | null = null;
+  /** ce que le curseur survole : sert à changer le curseur de la page */
+  hover: 'bird' | 'flower' | 'water' | null = null;
+  onHover?: (what: 'bird' | 'flower' | 'water' | null) => void;
+  onBirds?: () => void;
+  onBlow?: () => void;
+  onSplash?: () => void;
   private clock = new THREE.Timer();
   private pointer = new THREE.Vector2(-10, -10);
   private ray = new THREE.Raycaster();
@@ -35,6 +49,7 @@ export class World {
     this.walk = new Walk(this.camera);
     window.addEventListener('pointermove', (e) => this.pointer.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1));
     window.addEventListener('pointerleave', () => this.pointer.set(-10, -10));
+    this.renderer.domElement.addEventListener('pointerdown', () => this.throwStone());
     new ResizeObserver(() => this.resize()).observe(host);
   }
 
@@ -74,7 +89,16 @@ export class World {
     this.fireflies = createFireflies();
     this.scene.add(this.fireflies);
     this.lake = createLake(this.dpr);
-    this.scene.add(this.lake);
+    this.scene.add(this.lake.mesh);
+
+    progress(0.82, 'Oiseaux et pissenlits');
+    await step();
+    this.birds = new Birds();
+    this.birds.onTakeOff = () => this.onBirds?.();
+    this.scene.add(this.birds.mesh);
+    this.dandelions = new Dandelions();
+    this.dandelions.onBlow = () => this.onBlow?.();
+    this.scene.add(this.dandelions.group);
 
     progress(0.9, 'Compilation des matériaux');
     await step();
@@ -128,10 +152,22 @@ export class World {
     ff.uniforms.uPixel.value = this.renderer.getPixelRatio() * (this.host.clientHeight / 760) * 3.2;
     this.updateLantern(dt);
 
+    // interactions : le rayon du curseur sert aux oiseaux, aux pissenlits et aux ricochets
+    this.pointerRay = this.pointer.x < -2 ? null : (this.ray.setFromCamera(this.pointer, this.camera), this.ray.ray);
+    const overBird = this.birds.update(dt, time, this.camera, this.pointerRay);
+    this.dandelions.setPixel(ff.uniforms.uPixel.value);
+    const overFlower = this.dandelions.update(time, this.pointerRay);
+    const overWater = !!this.pointerRay && t > 0.86 && this.stonePoint() !== null;
+    const hover = overBird ? 'bird' : overFlower ? 'flower' : overWater ? 'water' : null;
+    if (hover !== this.hover) {
+      this.hover = hover;
+      this.onHover?.(hover);
+    }
+
     this.updateRays();
 
     // le lac ne coûte un second rendu que lorsqu'il est dans le champ
-    this.lake.visible = t > 0.8;
+    this.lake.mesh.visible = t > 0.8;
 
     // flou de respiration : monte vite, redescend lentement
     this.blurTween = Math.max(0, this.blurTween - dt * 1.4);
@@ -144,6 +180,26 @@ export class World {
     this.stats.triangles = this.renderer.info.render.triangles;
     this.onFrame?.(t);
     this.adapt(dt);
+  }
+
+  // ricochet : le clic touche la surface du lac
+  private stone = new THREE.Vector3();
+  private stonePoint() {
+    const r = this.pointerRay;
+    if (!r || r.direction.y > -0.02) return null;
+    const dist = (LAKE_LEVEL - r.origin.y) / r.direction.y;
+    if (dist < 0 || dist > 140) return null;
+    this.stone.copy(r.origin).addScaledVector(r.direction, dist);
+    const d = Math.hypot(this.stone.x - LAKE_X, this.stone.z - LAKE_Z);
+    return d < LAKE_R ? this.stone : null;
+  }
+
+  private throwStone() {
+    if (this.walk.current < 0.86) return;
+    const p = this.stonePoint();
+    if (!p) return;
+    this.lake.ripple(p.x, p.z, this.clock.getElapsed());
+    this.onSplash?.();
   }
 
   // rayons : actifs quand le soleil est au-dessus de l'horizon et devant le promeneur
