@@ -262,6 +262,7 @@ const fragment = /* glsl */ `
     vec3 L = uSunDir;
 
     vec3 albedo;
+    float care = 0.0; // part de care sur ce pixel, réutilisée plus bas pour l'éclairer
     if (vPart < 0.5) {
       float angle = atan(vLocal.x, vLocal.z);
       float bark = fbm(vec2(angle * 3.0, vLocal.y * 5.0));
@@ -271,12 +272,13 @@ const fragment = /* glsl */ `
       float face = cos(angle - vGem.y * 6.28);
       float band = smoothstep(0.82, 0.95, face) * vGem.x;
       band *= smoothstep(0.35, 0.8, vLocal.y) * (1.0 - smoothstep(3.4, 4.6, vLocal.y));
-      vec3 wood = mix(vec3(0.58, 0.46, 0.30), vec3(0.78, 0.65, 0.45), bark);
+      vec3 wood = mix(vec3(0.70, 0.57, 0.38), vec3(0.90, 0.78, 0.56), bark);
       // les coups de hapchot laissent des traits en travers, tous les quelques centimètres
       // les entailles sont espacées d'une main, pas d'un centimètre : à 26 par mètre, la care
       // se lisait comme une fermeture éclair
       float cuts = smoothstep(0.62, 0.95, abs(sin(vLocal.y * 8.5 + angle * 1.2)));
       albedo = mix(albedo, mix(wood, wood * 0.72, cuts), band);
+      care = band;
     } else {
       float clump = fbm(vLocal.xz * 1.3 + vLocal.y * 0.8 + vVar.x * 10.0);
       albedo = mix(uLeaf, uLeafWarm, vVar.x * 0.6 + clump * 0.4);
@@ -295,6 +297,9 @@ const fragment = /* glsl */ `
     vec3 amb = mix(uSkyHorizon, uSkyTop, n.y * 0.5 + 0.5) * uAmbient * ao;
     vec3 rim = uSkyHorizon * edge * 0.25 * vPart;
     vec3 col = albedo * (sun + amb + lantern(vWorld, n)) + rim * albedo * 2.0;
+    // le bois vif est lisse et pâle : il accroche la lumière du ciel que l'écorce absorbe, et
+    // c'est ce qui le fait ressortir même quand le tronc est à contre-jour
+    col += mix(uSkyHorizon, uSkyTop, 0.5) * uAmbient * care * 0.7 * albedo;
     col = applyFog(col, vWorld, cameraPosition);
     gl_FragColor = vec4(col, 1.0);
   }
