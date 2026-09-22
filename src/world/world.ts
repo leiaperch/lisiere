@@ -9,6 +9,7 @@ import { Birds } from './fauna';
 import { Egrets } from './egret';
 import { Dandelions } from './flora';
 import { createUndergrowth } from './undergrowth';
+import { createVineyard } from './vines';
 import { SunShadow, type Caster } from './shadow';
 import { createCrasteBanks, createCrasteWater, createDeck } from './craste';
 import { Post } from './post';
@@ -25,7 +26,7 @@ export class World {
   readonly camera = new THREE.PerspectiveCamera(52, 1, 0.1, 900);
   readonly walk: Walk;
   readonly post: Post;
-  readonly stats = { frames: 0, triangles: 0, calls: 0, trees: 0, blades: 0, undergrowth: 0 };
+  readonly stats = { frames: 0, triangles: 0, calls: 0, trees: 0, blades: 0, undergrowth: 0, vines: 0 };
   private fireflies!: THREE.Points;
   private lake!: Lake;
   private birds!: Birds;
@@ -89,7 +90,9 @@ export class World {
     await step();
     const { mesh: terrain, material: terrainMat } = createTerrain();
     this.terrainMat = terrainMat;
-    terrainMat.uniforms.uBiome.value = paintBiomes();
+    const maps = paintBiomes();
+    terrainMat.uniforms.uBiome.value = maps.biome;
+    terrainMat.uniforms.uBiome2.value = maps.biome2;
     this.scene.add(terrain);
 
     progress(0.3, 'Plantation des arbres');
@@ -105,7 +108,13 @@ export class World {
     terrainMat.uniforms.uForest.value = painted.forest;
     setDaylight(0);
 
-    progress(0.5, 'Fougères, souches et rochers');
+    progress(0.42, 'Les rangs de vigne');
+    await step();
+    const vineyard = createVineyard();
+    this.stats.vines = vineyard.count;
+    this.scene.add(vineyard.group);
+
+    progress(0.55, 'Fougères, souches et rochers');
     await step();
     const under = createUndergrowth();
     this.stats.undergrowth = Object.values(under.counts).reduce((a, b) => a + b, 0);

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { glslNoise, glslWorld, world } from './light';
-import { SEGMENTS, biomeWeights, buildFields, trailDistance } from './paths';
+import { BIOMES, SEGMENTS, biomeWeights, buildFields, trailDistance } from './paths';
 import { CRASTE, crasteDistance, crasteProfile, deckHeight } from './craste';
 
 export { trailDistance };
@@ -11,6 +11,9 @@ export type { BiomeId } from './paths';
 //
 // La clairière est sur le tronc commun, avant la fourche. Ensuite, chaque branche a son accident :
 // la dune puis la plage côté océan, la tourbière et l'étang côté marais.
+
+/** la lagune du bassin, derrière la flèche de sable : eaux calmes, marnage, prés salés */
+export const BASSIN = { x: 150, z: -300, radius: 100, level: -2.5 };
 
 /** l'étang, au bout du marais : c'est là que l'on fait des ricochets */
 export const LAKE = { x: 80, z: -202, radius: 27, level: -3.0 };
@@ -51,13 +54,14 @@ export function fbm(x: number, y: number) {
   return s;
 }
 
-const weights = [0, 0, 0];
+const weights: number[] = [];
 
 export function heightAt(x: number, z: number, dTrail = trailDistance(x, z)) {
   biomeWeights(x, z, weights);
-  // le marais est plat et bas, la dune modelée par le vent : l'amplitude du bruit suit le biome
-  const rough = weights[0] * 1 + weights[1] * 0.8 + weights[2] * 0.45;
-  const drop = weights[2] * 2.2;
+  const [vigne, foret, dune, bassin, marais, delta] = weights;
+  // chaque terre a son grain : graves roulantes, sable modelé par le vent, tourbe plate
+  const rough = vigne * 0.7 + foret * 1 + dune * 0.8 + bassin * 0.2 + marais * 0.45 + delta * 0.3;
+  const drop = marais * 2.2 + delta * 2.6;
 
   let h = (fbm(x * 0.018, z * 0.018) - 0.5) * 7 * rough;
   // les versants se relèvent loin du sentier, qui suit un fond de vallon
@@ -65,6 +69,8 @@ export function heightAt(x: number, z: number, dTrail = trailDistance(x, z)) {
   // le sentier est aplani
   h *= THREE.MathUtils.smoothstep(dTrail, 1.2, 7) * 0.8 + 0.2;
   h -= drop;
+  // les graves montent doucement au-dessus de la lisière : le vignoble domine la forêt
+  h += vigne * (3.5 + THREE.MathUtils.smoothstep(z, 20, 140) * 9);
 
   // la clairière est un replat
   const dc = Math.hypot(x - CLEARING.x, z - CLEARING.z);
@@ -74,7 +80,6 @@ export function heightAt(x: number, z: number, dTrail = trailDistance(x, z)) {
   const seaward = coastMask(x, z);
   if (seaward > 0.001) {
     const crest = DUNE.height * Math.exp(-((z - DUNE.z) ** 2) / (2 * DUNE.spread ** 2));
-    // bosses de sable plus courtes que le relief de la forêt
     const sand = (fbm(x * 0.06, z * 0.06) - 0.5) * 2.6 * THREE.MathUtils.smoothstep(z, SEA.shore + 8, DUNE.z + 10);
     const beach = THREE.MathUtils.lerp(SEA.level - 1.7, 0.4, THREE.MathUtils.smoothstep(z, SEA.shore - 12, DUNE.z - 6));
     // le sentier gravit la dune au lieu de la raboter : seul le petit modelé de sable s'aplanit
@@ -82,20 +87,27 @@ export function heightAt(x: number, z: number, dTrail = trailDistance(x, z)) {
     h = THREE.MathUtils.lerp(h, beach + crest + sand * flat, seaward);
   }
 
-  // cuvette de la tourbière : on marche presque au ras de l'eau
-  const dm = Math.hypot(x - MARSH.x, z - MARSH.z);
-  const bog = 1 - THREE.MathUtils.smoothstep(dm, MARSH.radius * 0.55, MARSH.radius * 1.35);
-  h = THREE.MathUtils.lerp(h, MARSH.level - 0.6, bog);
+  // côté bassin : le schorre, presque plat, à peine au-dessus de l'eau, puis la vasière
+  const db = Math.hypot(x - BASSIN.x, z - BASSIN.z);
+  const tide = 1 - THREE.MathUtils.smoothstep(db, BASSIN.radius * 0.72, BASSIN.radius * 1.45);
+  if (tide > 0.001) {
+    const schorre = BASSIN.level + 0.5 + (fbm(x * 0.05 + 12, z * 0.05) - 0.5) * 0.5;
+    const slikke = BASSIN.level - 1.5;
+    h = THREE.MathUtils.lerp(h, THREE.MathUtils.lerp(schorre, slikke, THREE.MathUtils.smoothstep(db, BASSIN.radius * 1.15, BASSIN.radius * 0.8)), tide);
+  }
 
-  // la craste : le terrain se contente de descendre sous les berges, qui sont dessinées à part
-  // Le terrain suit le même profil que les berges, mais toujours un demi-mètre plus bas : sinon
-  // il ressort entre les facettes du fossé et le talus se strie.
+  // la craste : le terrain se contente de descendre sous les berges, dessinées à part
   const dcr = crasteDistance(x, z);
   if (dcr < CRASTE.bank) {
     // l'écart se referme au bord, sinon le terrain tombe d'une marche au ras de la berge
     const off = 0.5 * (1 - THREE.MathUtils.smoothstep(dcr, CRASTE.bank * 0.7, CRASTE.bank));
     h = Math.min(h, crasteProfile(dcr, h) - off);
   }
+
+  // cuvette de la tourbière : on marche presque au ras de l'eau
+  const dm = Math.hypot(x - MARSH.x, z - MARSH.z);
+  const bog = 1 - THREE.MathUtils.smoothstep(dm, MARSH.radius * 0.55, MARSH.radius * 1.35);
+  h = THREE.MathUtils.lerp(h, MARSH.level - 0.6, bog);
 
   // cuvette de l'étang
   const dl = Math.hypot(x - LAKE.x, z - LAKE.z);
@@ -119,11 +131,11 @@ export function coastMask(x: number, z: number) {
 
 export function createTerrain() {
   buildFields();
-  const size = 460;
-  const seg = 230;
+  const size = 560;
+  const seg = 280;
   const geo = new THREE.PlaneGeometry(size, size, seg, seg);
   geo.rotateX(-Math.PI / 2);
-  geo.translate(0, 0, -95);
+  geo.translate(0, 0, -85);
   const pos = geo.attributes.position as THREE.BufferAttribute;
   const trail = new Float32Array(pos.count);
   for (let i = 0; i < pos.count; i++) {
@@ -141,6 +153,7 @@ export function createTerrain() {
       ...world,
       uForest: { value: null as THREE.Texture | null },
       uBiome: { value: null as THREE.Texture | null },
+      uBiome2: { value: null as THREE.Texture | null },
       // fourche : x, z du repère, direction survolée et intensité du surlignage
       uChoice: { value: new THREE.Vector4(0, 0, 0, 0) },
       uChoiceDir: { value: new THREE.Vector2(0, -1) },
@@ -162,6 +175,7 @@ export function createTerrain() {
       ${glslWorld}
       uniform sampler2D uForest;
       uniform sampler2D uBiome;
+      uniform sampler2D uBiome2;
       uniform vec4 uChoice;
       uniform vec2 uChoiceDir;
       varying vec3 vWorld;
@@ -173,21 +187,29 @@ export function createTerrain() {
         float patches = fbm(vWorld.xz * 0.05 + 3.0);
         vec2 fuv = (vWorld.xz - uShadowBounds.xy) / uShadowBounds.zw;
         float forest = texture2D(uForest, fuv).r; // densité d'arbres, floutée : sert d'occlusion
-        vec4 biome = texture2D(uBiome, fuv);      // r forêt, g dune, b marais, a bande côtière
+        vec4 b1 = texture2D(uBiome, fuv);   // r vigne, g forêt, b dune, a bande côtière
+        vec4 b2 = texture2D(uBiome2, fuv);  // r bassin, g marais, b delta
 
-        // herbe sèche et mousse sous les arbres, tourbe et sphaigne au marais, sable vers l'océan
+        // herbe sèche et mousse sous les arbres, tourbe au marais, graves dans la vigne
         vec3 meadow = mix(vec3(0.20, 0.23, 0.08), vec3(0.34, 0.32, 0.12), patches);
         vec3 moss = vec3(0.09, 0.12, 0.05);
         vec3 wood = mix(meadow, moss, forest);
         vec3 peat = mix(vec3(0.13, 0.13, 0.09), vec3(0.20, 0.25, 0.12), patches * 0.7 + grain * 0.3);
-        vec3 albedo = mix(wood, peat, biome.b);
+        // les graves : un sol de graviers clairs, presque nu entre les rangs
+        vec3 graves = mix(vec3(0.30, 0.26, 0.21), vec3(0.47, 0.42, 0.34), grain);
+        graves = mix(graves, vec3(0.22, 0.24, 0.13), smoothstep(0.45, 0.8, patches) * 0.5);
+        // le schorre : vase grise et salicorne rase
+        vec3 schorre = mix(vec3(0.17, 0.17, 0.14), vec3(0.26, 0.27, 0.19), patches);
+        schorre = mix(schorre, vec3(0.12, 0.11, 0.10), smoothstep(0.3, 0.8, grain) * 0.6);
+
+        vec3 albedo = wood * b1.g + peat * (b2.g + b2.b) + graves * b1.r + schorre * b2.r;
 
         // le sable : clair et ridé sur la dune, foncé et lisse là où la mer vient le mouiller
         float wet = 1.0 - smoothstep(${SEA.shore.toFixed(1)} - 4.0, ${SEA.shore.toFixed(1)} + 10.0, vWorld.z);
         float ridges = fbm(vec2(vWorld.x * 0.8, vWorld.z * 0.12));
         vec3 sand = mix(vec3(0.62, 0.56, 0.45), vec3(0.78, 0.71, 0.57), ridges);
         sand = mix(sand, vec3(0.26, 0.25, 0.23), wet);
-        albedo = mix(albedo, sand, biome.a);
+        albedo = mix(albedo, sand, max(b1.a, b1.b * 0.6));
 
         vec3 dirt = mix(vec3(0.30, 0.22, 0.14), vec3(0.40, 0.31, 0.20), grain);
         float path = 1.0 - smoothstep(0.8, 2.3 + grain * 0.8, vTrail);
@@ -204,7 +226,7 @@ export function createTerrain() {
         float ndl = max(dot(n, uSunDir), 0.0);
         float shadow = sunShadow(vWorld, ndl);
         // le couvert n'assombrit que sous les arbres : la plage reste ouverte
-        float cover = forest * biome.r * (1.0 - biome.a);
+        float cover = forest * b1.g * (1.0 - b1.a);
         vec3 direct = uSunColor * ndl * shadow * (1.0 - cover * 0.75);
         // à l'ombre, il ne reste que la lumière du ciel, un peu plus froide
         vec3 ambient = mix(uSkyHorizon, uSkyTop, 0.5) * uAmbient * (1.0 - cover * 0.55) * (0.72 + 0.28 * shadow);
@@ -223,27 +245,38 @@ export function createTerrain() {
 export function paintBiomes() {
   const [bx, bz, bw, bd] = world.uShadowBounds.value.toArray();
   const size = 256;
-  const data = new Uint8Array(size * size * 4);
-  const w = [0, 0, 0];
+  const a = new Uint8Array(size * size * 4);
+  const b = new Uint8Array(size * size * 4);
+  const w: number[] = [];
   for (let iy = 0; iy < size; iy++) {
     for (let ix = 0; ix < size; ix++) {
       const x = bx + ((ix + 0.5) / size) * bw;
       const z = bz + ((iy + 0.5) / size) * bd;
       biomeWeights(x, z, w);
       const i = (iy * size + ix) * 4;
-      data[i] = Math.round(w[0] * 255);
-      data[i + 1] = Math.round(w[1] * 255);
-      data[i + 2] = Math.round(w[2] * 255);
-      data[i + 3] = Math.round(coastMask(x, z) * 255);
+      // BIOMES : vigne, foret, dune, bassin, marais, delta
+      a[i] = Math.round(w[0] * 255);
+      a[i + 1] = Math.round(w[1] * 255);
+      a[i + 2] = Math.round(w[2] * 255);
+      a[i + 3] = Math.round(coastMask(x, z) * 255);
+      b[i] = Math.round(w[3] * 255);
+      b[i + 1] = Math.round(w[4] * 255);
+      b[i + 2] = Math.round(w[5] * 255);
+      b[i + 3] = 255;
     }
   }
-  const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
-  tex.colorSpace = THREE.NoColorSpace;
-  tex.minFilter = tex.magFilter = THREE.LinearFilter;
-  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
-  tex.needsUpdate = true;
-  return tex;
+  const make = (data: Uint8Array) => {
+    const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+    tex.colorSpace = THREE.NoColorSpace;
+    tex.minFilter = tex.magFilter = THREE.LinearFilter;
+    tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+    tex.needsUpdate = true;
+    return tex;
+  };
+  return { biome: make(a), biome2: make(b) };
 }
+
+void BIOMES;
 
 // ───────────── repères sur le parcours ─────────────
 

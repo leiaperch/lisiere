@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { World } from './world/world';
 import { state } from './world/light';
 import { routeProfile } from './world/terrain';
-import { START, TOTAL_LENGTH } from './world/paths';
+import { TOTAL_LENGTH, TRUNK, branchRoute } from './world/paths';
 import { Ambience } from './sound';
 
 const $ = <T extends HTMLElement>(s: string) => document.querySelector<T>(s)!;
@@ -15,7 +15,7 @@ const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 // commun prolongé par la branche du littoral, et il est redessiné dès qu'un chemin est pris.
 const SAMPLES = 90;
 const METERS_PER_UNIT = 8;
-let route = [START, 'cote'];
+let route = [...TRUNK, ...branchRoute('cote')];
 let profile = routeProfile(route, SAMPLES);
 let hMin = Math.min(...profile);
 let hMax = Math.max(...profile);
@@ -23,7 +23,7 @@ const trailKm = (TOTAL_LENGTH * METERS_PER_UNIT) / 1000;
 const altitude = (h: number) => Math.round(318 + h * 6);
 
 function setRoute(branch: string) {
-  route = [START, branch];
+  route = [...TRUNK, ...branchRoute(branch)];
   profile = routeProfile(route, SAMPLES);
   hMin = Math.min(...profile);
   hMax = Math.max(...profile);
@@ -84,13 +84,14 @@ async function boot() {
 // Cinq étapes, qui ne s'affichent pas en grands titres : elles déclenchent la respiration de
 // l'objectif, la note du carnet et l'annonce pour les lecteurs d'écran.
 const STEPS = [
-  { to: 0.19, name: 'Lisière' },
-  { to: 0.38, name: 'Sous-bois' },
+  { to: 0.14, name: 'Les vignes' },
+  { to: 0.28, name: 'Lisière' },
+  { to: 0.42, name: 'Sous-bois' },
   { to: 0.5, name: 'La clairière' },
   { to: 0.56, name: 'La fourche' },
   { to: 1.01, name: 'La suite' },
 ];
-const ENDINGS: Record<string, string> = { cote: 'La dune et l’océan', marais: 'Le marais et l’étang' };
+const ENDINGS: Record<string, string> = { cote: 'La dune, l’océan et le bassin', marais: 'Le marais, l’étang et le delta' };
 
 function setupWalk(world: World) {
   const walkSection = $('#walk');
@@ -101,7 +102,7 @@ function setupWalk(world: World) {
     if (i === active) return;
     const first = active < 0;
     active = i;
-    const name = i === STEPS.length - 1 ? (ENDINGS[route[1]] ?? STEPS[i].name) : STEPS[i].name;
+    const name = i === STEPS.length - 1 ? (ENDINGS[route[TRUNK.length]] ?? STEPS[i].name) : STEPS[i].name;
     live.textContent = `Étape ${i + 1} sur ${STEPS.length}, ${name}`;
     if (!first && !reduced) world.breathe();
   };

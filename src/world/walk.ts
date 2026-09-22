@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { surfaceAt } from './terrain';
-import { SEGMENTS, START, TOTAL_LENGTH, type Position, routePosition } from './paths';
+import { SEGMENTS, START, TOTAL_LENGTH, TRUNK, TRUNK_LENGTH, type Position, branchRoute, routePosition } from './paths';
 
 // La marche : la caméra avance sur le sentier à hauteur d'yeux. Le défilement choisit la distance
 // parcourue, un amorti léger la rejoint. Le regard suit le chemin, avec des intentions par endroit
@@ -17,6 +17,12 @@ interface Gaze {
 }
 
 const GAZE: Record<string, Gaze[]> = {
+  vigne: [
+    { at: 0.0, yaw: 0.1, pitch: 0.04, eye: 1.7 },
+    { at: 0.3, yaw: -0.42, pitch: -0.02, eye: 1.7 }, // on regarde filer les rangs sur la gauche
+    { at: 0.6, yaw: 0.3, pitch: 0.06, eye: 1.7 }, // puis le château, sur la droite
+    { at: 1.0, yaw: 0.0, pitch: 0.08, eye: 1.7 }, // la lisière se referme devant
+  ],
   approche: [
     { at: 0.0, yaw: 0.18, pitch: 0.06, eye: 1.7 },
     { at: 0.2, yaw: 0.05, pitch: 0.02, eye: 1.65 },
@@ -30,6 +36,18 @@ const GAZE: Record<string, Gaze[]> = {
     { at: 0.35, yaw: 0.3, pitch: -0.02, eye: 1.6 }, // entre les pins, on regarde le sable arriver
     { at: 0.68, yaw: -0.18, pitch: 0.14, eye: 1.7 }, // la montée de la dune
     { at: 1.0, yaw: 0.0, pitch: -0.07, eye: 1.8 }, // la crête : la plage en contrebas, puis l'océan
+  ],
+  bassin: [
+    { at: 0.0, yaw: -0.3, pitch: 0.0, eye: 1.75 }, // on quitte l'océan, dos au couchant
+    { at: 0.35, yaw: 0.25, pitch: -0.08, eye: 1.7 },
+    { at: 0.7, yaw: -0.15, pitch: 0.02, eye: 1.7 },
+    { at: 1.0, yaw: 0.12, pitch: 0.04, eye: 2.2 }, // la lagune s'ouvre, la cabane au loin
+  ],
+  delta: [
+    { at: 0.0, yaw: 0.1, pitch: 0.0, eye: 1.65 },
+    { at: 0.4, yaw: -0.3, pitch: -0.06, eye: 1.6 }, // les bras d'eau entre les aulnes
+    { at: 0.75, yaw: 0.2, pitch: 0.05, eye: 1.65 },
+    { at: 1.0, yaw: 0.0, pitch: 0.06, eye: 1.9 },
   ],
   marais: [
     { at: 0.0, yaw: -0.05, pitch: 0.0, eye: 1.65 },
@@ -46,7 +64,7 @@ export class Walk {
   target = 0;
   /** position réelle, amortie */
   current = 0;
-  route: string[] = [START];
+  route: string[] = [...TRUNK];
   chosen: string | null = null;
   private yaw = 0;
   private pitch = 0;
@@ -76,17 +94,17 @@ export class Walk {
 
   /** distance à laquelle la marche s'arrête tant qu'aucune branche n'est prise */
   private get limit() {
-    return this.chosen ? TOTAL_LENGTH : SEGMENTS[START].length;
+    return this.chosen ? TOTAL_LENGTH : TRUNK_LENGTH;
   }
 
   /** vrai quand on fait défiler au-delà de la fourche sans avoir choisi de chemin */
   get blocked() {
-    return !this.chosen && this.target > SEGMENTS[START].length + 8;
+    return !this.chosen && this.target > TRUNK_LENGTH + 8;
   }
 
   /** vrai quand le promeneur attend à la fourche */
   get waiting() {
-    return !this.chosen && this.current > SEGMENTS[START].length - 14;
+    return !this.chosen && this.current > TRUNK_LENGTH - 14;
   }
 
   /**
@@ -110,7 +128,7 @@ export class Walk {
   choose(id: string) {
     if (this.chosen || !SEGMENTS[START].next.includes(id)) return;
     this.chosen = id;
-    this.route = [START, id];
+    this.route = [...TRUNK, ...branchRoute(id)];
     this.mapFrom = this.scrollU;
     this.mapTo = this.current / TOTAL_LENGTH;
     this.target = this.current; // on repart d'où l'on est, sans sursaut

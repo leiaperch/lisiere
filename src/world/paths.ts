@@ -1,23 +1,25 @@
 import * as THREE from 'three';
 
-// Le réseau de sentiers. La balade part d'un tronc commun sous les arbres, puis se sépare à la
-// fourche : on continue vers l'océan, dune après dune, ou on s'enfonce dans les terres, vers le
-// marais et son étang.
+// Le réseau de sentiers.
 //
-// Tout le reste du monde (relief, arbres, herbes, sous-bois) a besoin de la distance au sentier
-// le plus proche, des dizaines de milliers de fois. Comparer chaque point à la courbe coûtait
-// déjà cher avec un seul chemin ; avec trois, c'est intenable. On calcule donc une fois pour
-// toutes un champ de distances sur une grille, et chaque requête devient une simple lecture.
+// La balade part des rangs de vigne, entre sous les arbres, et se sépare à la fourche : on continue
+// vers l'océan puis on bascule côté bassin, ou on s'enfonce dans les terres, vers le marais puis
+// le delta de la rivière. Chaque branche a donc deux tronçons ; le choix, lui, est unique.
+//
+// Tout le reste du monde (relief, arbres, herbes, sous-bois) a besoin de la distance au sentier le
+// plus proche, des dizaines de milliers de fois. Comparer chaque point à chaque courbe coûte trop
+// cher : on calcule une fois pour toutes un champ de distances sur une grille, et chaque requête
+// devient une simple lecture.
 
-export type BiomeId = 'foret' | 'dune' | 'marais';
-export const BIOMES: BiomeId[] = ['foret', 'dune', 'marais'];
+export type BiomeId = 'vigne' | 'foret' | 'dune' | 'bassin' | 'marais' | 'delta';
+export const BIOMES: BiomeId[] = ['vigne', 'foret', 'dune', 'bassin', 'marais', 'delta'];
 
 export interface Segment {
   id: string;
   biome: BiomeId;
   curve: THREE.CatmullRomCurve3;
   length: number;
-  /** segments accessibles depuis la fin de celui-ci */
+  /** segment qui suit automatiquement, ou branches proposées au choix */
   next: string[];
 }
 
@@ -29,9 +31,18 @@ const curve = (pts: [number, number][]) =>
     0.5
   );
 
-// tronc commun : la prairie, la lisière, le sous-bois, puis la fourche.
-// Les derniers mètres sont volontairement rectilignes : on arrive face à la fourche, et les deux
-// chemins s'ouvrent à droite et à gauche, tous deux dans le champ.
+// les rangs de vigne sur les graves, avant la lisière
+const VINES: [number, number][] = [
+  [8, 152],
+  [4, 126],
+  [-4, 100],
+  [0, 74],
+  [5, 48],
+  [0, 24],
+];
+
+// tronc commun sous les arbres. Les derniers mètres sont rectilignes : on arrive face à la
+// fourche, et les deux chemins s'ouvrent à droite et à gauche, tous deux dans le champ.
 const APPROACH: [number, number][] = [
   [0, 24],
   [2, 4],
@@ -52,6 +63,16 @@ const TO_COAST: [number, number][] = [
   [-29, -201],
 ];
 
+// puis on bascule de l'autre côté de la flèche de sable, vers les eaux calmes du bassin
+const TO_BASIN: [number, number][] = [
+  [-29, -201],
+  [-12, -212],
+  [12, -218],
+  [36, -223],
+  [58, -230],
+  [78, -239],
+];
+
 // vers l'intérieur : le sentier part sur la droite et descend dans la zone humide
 const TO_MARSH: [number, number][] = [
   [0, -94],
@@ -62,49 +83,76 @@ const TO_MARSH: [number, number][] = [
   [61, -179],
 ];
 
+// puis il remonte la rivière, dans les aulnes
+const TO_DELTA: [number, number][] = [
+  [61, -179],
+  [78, -181],
+  [96, -177],
+  [113, -172],
+  [130, -165],
+  [146, -156],
+];
+
 function segment(id: string, biome: BiomeId, pts: [number, number][], next: string[] = []): Segment {
   const c = curve(pts);
   return { id, biome, curve: c, length: c.getLength(), next };
 }
 
 export const SEGMENTS: Record<string, Segment> = {
+  vigne: segment('vigne', 'vigne', VINES, ['approche']),
   approche: segment('approche', 'foret', APPROACH, ['cote', 'marais']),
-  cote: segment('cote', 'dune', TO_COAST),
-  marais: segment('marais', 'marais', TO_MARSH),
+  cote: segment('cote', 'dune', TO_COAST, ['bassin']),
+  bassin: segment('bassin', 'bassin', TO_BASIN),
+  marais: segment('marais', 'marais', TO_MARSH, ['delta']),
+  delta: segment('delta', 'delta', TO_DELTA),
 };
 
-export const START = 'approche';
+export const START = 'vigne';
+/** les deux chemins proposés à la fourche */
 export const CHOICES = SEGMENTS.approche.next;
+/** ce qu'on parcourt avant d'avoir à choisir */
+export const TRUNK = ['vigne', 'approche'];
+const TRUNK_LENGTH = TRUNK.reduce((n, id) => n + SEGMENTS[id].length, 0);
+
+/** itinéraire complet d'une branche, continuations comprises */
+export function branchRoute(id: string): string[] {
+  const out = [id];
+  let seg = SEGMENTS[id];
+  while (seg.next.length === 1) {
+    seg = SEGMENTS[seg.next[0]];
+    out.push(seg.id);
+  }
+  return out;
+}
 
 /** point de la fourche, où le promeneur s'arrête tant qu'il n'a pas choisi */
-export const FORK = new THREE.Vector3(APPROACH[APPROACH.length - 1][0], 0, APPROACH[APPROACH.length - 1][1]);
+export const FORK = (() => {
+  const p = SEGMENTS.approche.curve.getPointAt(1);
+  return new THREE.Vector3(p.x, 0, p.z);
+})();
 
-// Les deux branches font presque la même longueur : le défilement de la page garde ainsi la même
-// échelle avant et après le choix, et rien ne saute au moment où l'on s'engage.
-export const BRANCH_LENGTH = Math.max(...CHOICES.map((id) => SEGMENTS[id].length));
-export const TOTAL_LENGTH = SEGMENTS.approche.length + BRANCH_LENGTH;
+const BRANCH_LENGTH = Math.max(...CHOICES.map((id) => branchRoute(id).reduce((n, s) => n + SEGMENTS[s].length, 0)));
+export const TOTAL_LENGTH = TRUNK_LENGTH + BRANCH_LENGTH;
 /** avancement, 0 → 1, auquel on atteint la fourche */
-export const FORK_AT = SEGMENTS.approche.length / TOTAL_LENGTH;
+export const FORK_AT = TRUNK_LENGTH / TOTAL_LENGTH;
+export { TRUNK_LENGTH };
 
 /**
  * Le temps ne court pas à la même vitesse sur les deux branches. Vers l'océan, la lumière se
- * retient : on arrive sur la dune au moment où le soleil touche l'eau. Vers le marais, elle va
- * jusqu'au bout, et la nuit tombe sur l'étang. Les deux fins ne se ressemblent pas.
+ * retient : on arrive sur la dune au moment où le soleil touche l'eau, et la nuit tombe sur le
+ * bassin. Vers le marais, elle va plus vite, et le delta se traverse à la nuit.
  */
-export const TIME_RATE: Record<string, number> = { cote: 0.2, marais: 0.85 };
+export const TIME_RATE: Record<string, number> = { cote: 0.35, marais: 0.85 };
 
 // ───────────── champ de distances ─────────────
 
-const FIELD = { x0: -232, z0: -352, cell: 1.5, w: 0, d: 0 };
-FIELD.w = Math.ceil(464 / FIELD.cell);
-FIELD.d = Math.ceil(472 / FIELD.cell);
+const FIELD = { x0: -250, z0: -340, cell: 1.6, w: 0, d: 0 };
+FIELD.w = Math.ceil(520 / FIELD.cell);
+FIELD.d = Math.ceil(530 / FIELD.cell);
 
 /** une carte de distances par biome : permet aussi de savoir dans quel biome on se trouve */
-const fields: Record<BiomeId, Float32Array> = {
-  foret: new Float32Array(FIELD.w * FIELD.d),
-  dune: new Float32Array(FIELD.w * FIELD.d),
-  marais: new Float32Array(FIELD.w * FIELD.d),
-};
+const fields = {} as Record<BiomeId, Float32Array>;
+for (const b of BIOMES) fields[b] = new Float32Array(FIELD.w * FIELD.d);
 let built = false;
 
 /** au-delà, la distance exacte n'a plus d'influence sur le relief ni sur les semis */
@@ -113,17 +161,17 @@ const FAR = 120;
 export function buildFields() {
   if (built) return;
   built = true;
-  // points d'échantillonnage, un peu plus d'un par mètre, regroupés par biome
-  const points: Record<BiomeId, number[]> = { foret: [], dune: [], marais: [] };
-  // Les premiers mètres d'une branche restent en forêt : sans cela, les roseaux et les oyats
-  // pousseraient jusque dans la fourche, et le changement de paysage arriverait trop tôt.
+  const points = {} as Record<BiomeId, number[]>;
+  for (const b of BIOMES) points[b] = [];
+  // Les premiers mètres d'un tronçon gardent le biome du précédent : sans cela le paysage
+  // changerait pile à la jonction, et les roseaux pousseraient jusque dans la fourche.
   const HOLD = 26;
   for (const seg of Object.values(SEGMENTS)) {
+    const previous = Object.values(SEGMENTS).find((s) => s.next.includes(seg.id));
     const n = Math.max(2, Math.round(seg.length));
-    const pts = seg.curve.getSpacedPoints(n);
-    pts.forEach((p, i) => {
+    seg.curve.getSpacedPoints(n).forEach((p, i) => {
       const along = (i / n) * seg.length;
-      const biome = seg.id !== START && along < HOLD ? 'foret' : seg.biome;
+      const biome = previous && along < HOLD ? previous.biome : seg.biome;
       points[biome].push(p.x, p.z);
     });
   }
@@ -166,7 +214,9 @@ function sample(field: Float32Array, x: number, z: number) {
 /** distance horizontale au sentier le plus proche, tous chemins confondus */
 export function trailDistance(x: number, z: number) {
   buildFields();
-  return Math.min(sample(fields.foret, x, z), sample(fields.dune, x, z), sample(fields.marais, x, z));
+  let best = FAR;
+  for (const b of BIOMES) best = Math.min(best, sample(fields[b], x, z));
+  return best;
 }
 
 /** distance aux sentiers d'un biome donné */
@@ -175,32 +225,34 @@ export function biomeDistance(biome: BiomeId, x: number, z: number) {
   return sample(fields[biome], x, z);
 }
 
-// Poids des trois biomes en un point : le plus proche domine, et la transition se fait sur une
+// Poids des biomes en un point : le plus proche domine, et la transition se fait sur une
 // trentaine de mètres pour qu'aucune frontière ne soit visible au sol.
 const BLEND = 36;
-export function biomeWeights(x: number, z: number, out = [0, 0, 0]) {
+export function biomeWeights(x: number, z: number, out: number[] = []) {
   buildFields();
   let sum = 0;
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < BIOMES.length; i++) {
     const d = sample(fields[BIOMES[i]], x, z);
     const w = Math.exp(-(d * d) / (BLEND * BLEND));
     out[i] = w;
     sum += w;
   }
   if (sum < 1e-6) {
-    out[0] = 1;
-    out[1] = out[2] = 0;
+    out.fill(0);
+    out[1] = 1;
     return out;
   }
-  for (let i = 0; i < 3; i++) out[i] /= sum;
+  for (let i = 0; i < BIOMES.length; i++) out[i] /= sum;
   return out;
 }
 
+const weightsTmp: number[] = [];
+
 /** biome dominant, pour les semis qui doivent trancher plutôt que mélanger */
 export function biomeAt(x: number, z: number): BiomeId {
-  const w = biomeWeights(x, z);
+  const w = biomeWeights(x, z, weightsTmp);
   let best = 0;
-  for (let i = 1; i < 3; i++) if (w[i] > w[best]) best = i;
+  for (let i = 1; i < BIOMES.length; i++) if (w[i] > w[best]) best = i;
   return BIOMES[best];
 }
 

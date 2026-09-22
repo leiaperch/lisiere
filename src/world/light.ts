@@ -46,7 +46,7 @@ export const world = {
   uLantern: { value: new THREE.Vector4(0, -100, 0, 0) }, // xyz position, w intensité
   uWind: { value: 1 },
   uShadowMap: { value: null as THREE.Texture | null },
-  uShadowBounds: { value: new THREE.Vector4(-160, -260, 320, 320) }, // x, z, largeur, profondeur
+  uShadowBounds: { value: new THREE.Vector4(-230, -330, 500, 500) }, // x, z, largeur, profondeur
   uShadowStrength: { value: 1 },
   // ombres portées calculées en direct depuis le soleil (voir shadow.ts)
   uShadowMapSun: { value: null as THREE.Texture | null },
