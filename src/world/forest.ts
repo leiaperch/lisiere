@@ -269,12 +269,14 @@ const fragment = /* glsl */ `
       // La care : une bande d'écorce enlevée, montant du pied vers la cime, entaillée de
       // chevrons obliques. C'est le bois nu qui apparaît, bien plus clair que l'écorce.
       float face = cos(angle - vGem.y * 6.28);
-      float band = smoothstep(0.86, 0.97, face) * vGem.x;
+      float band = smoothstep(0.82, 0.95, face) * vGem.x;
       band *= smoothstep(0.35, 0.8, vLocal.y) * (1.0 - smoothstep(3.4, 4.6, vLocal.y));
-      vec3 wood = mix(vec3(0.44, 0.34, 0.22), vec3(0.62, 0.50, 0.34), bark);
+      vec3 wood = mix(vec3(0.58, 0.46, 0.30), vec3(0.78, 0.65, 0.45), bark);
       // les coups de hapchot laissent des traits en travers, tous les quelques centimètres
-      float cuts = smoothstep(0.55, 0.9, abs(sin(vLocal.y * 26.0 + angle * 2.0)));
-      albedo = mix(albedo, mix(wood, wood * 0.62, cuts), band);
+      // les entailles sont espacées d'une main, pas d'un centimètre : à 26 par mètre, la care
+      // se lisait comme une fermeture éclair
+      float cuts = smoothstep(0.62, 0.95, abs(sin(vLocal.y * 8.5 + angle * 1.2)));
+      albedo = mix(albedo, mix(wood, wood * 0.72, cuts), band);
     } else {
       float clump = fbm(vLocal.xz * 1.3 + vLocal.y * 0.8 + vVar.x * 10.0);
       albedo = mix(uLeaf, uLeafWarm, vVar.x * 0.6 + clump * 0.4);
@@ -328,7 +330,12 @@ export function createForest(trees: Tree[]) {
       variation[i * 2] = t.hue;
       variation[i * 2 + 1] = (t.x * 0.13 + t.z * 0.07) % 1;
       gemmage[i * 2] = t.gem;
-      gemmage[i * 2 + 1] = (t.x * 0.37 + t.z * 0.21) % 1;
+      // La care regarde le chemin : le gemmeur travaille depuis la piste, il n'entaille pas la
+      // face cachée. L'angle est donné dans le repère de l'arbre, or chaque arbre est tourné au
+      // hasard autour de son axe — il faut donc retrancher cette rotation, sinon la care part
+      // dans n'importe quelle direction.
+      const spread = ((t.x * 0.37 + t.z * 0.21) % 1) * 0.16 - 0.08;
+      gemmage[i * 2 + 1] = spread + t.hue;
     });
     geo.setAttribute('aVar', new THREE.InstancedBufferAttribute(variation, 2));
     geo.setAttribute('aGem', new THREE.InstancedBufferAttribute(gemmage, 2));
@@ -443,7 +450,8 @@ export function createPots(trees: Tree[]) {
   const dummy = new THREE.Object3D();
   gemmed.forEach((t, i) => {
     // le pot est cloué du côté de la care, contre le tronc
-    const a = ((t.x * 0.37 + t.z * 0.21) % 1) * Math.PI * 2;
+    // même orientation que la care dans le shader : le pot se cloue sous l'entaille, pas ailleurs
+    const a = (((t.x * 0.37 + t.z * 0.21) % 1) * 0.16 - 0.08) * Math.PI * 2;
     const r = (t.kind === 3 ? 0.36 : 0.3) * t.scale;
     dummy.position.set(t.x + Math.sin(a) * r, t.y + 0.34, t.z + Math.cos(a) * r);
     dummy.rotation.set(0.1, a, 0);

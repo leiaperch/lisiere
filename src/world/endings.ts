@@ -88,7 +88,7 @@ function built(parts: THREE.BufferGeometry[], name: string, tone: number) {
         float ndl = max(dot(n, uSunDir), 0.0);
         float shadow = sunShadow(vWorld, ndl);
         vec3 amb = mix(uSkyHorizon, uSkyTop, n.y * 0.5 + 0.5) * uAmbient;
-        vec3 col = albedo * (uSunColor * ndl * shadow * 0.85 + amb + lantern(vWorld, n));
+        vec3 col = albedo * (uSunColor * ndl * shadow * 0.55 + amb + lantern(vWorld, n));
         gl_FragColor = vec4(applyFog(col, vWorld, cameraPosition), 1.0);
       }`,
   });
@@ -279,28 +279,30 @@ export function createVillage(groundAt: (x: number, z: number) => number, waterL
 
   // six cabanes alignées le long de la rive, toutes un peu différentes
   // alignées côté terre, le long du chemin, la façade tournée vers l'eau
+  // Reculées d'une dizaine de mètres et rapetissées : une cabane ostréicole est une pièce unique,
+  // pas une grange. À cinq mètres du chemin et sept mètres de haut, elles écrasaient tout.
   const cabins: [number, number, number, number][] = [
-    [95, -234, 0.3, 1],
-    [108, -237, 0.26, 0.9],
-    [120, -240, 0.34, 1.1],
-    [132, -245, 0.24, 0.95],
-    [143, -249, 0.38, 1.05],
-    [153, -254, 0.3, 0.9],
+    [93, -231, 0.3, 0.85],
+    [107, -233, 0.26, 0.78],
+    [120, -236, 0.34, 0.92],
+    [133, -241, 0.24, 0.8],
+    [145, -245, 0.38, 0.88],
+    [156, -250, 0.3, 0.75],
   ];
   for (const [x, z, ry, scale] of cabins) {
-    const w = 6.4 * scale;
-    const d = 4.4 * scale;
-    const h = 2.5 * scale;
-    const parts = [box(w, h, d, 0, h / 2 + 0.5, 0), gable(w * 1.12, 1.5 * scale, d * 1.2, 0, h + 0.5 + 0.75 * scale, 0)];
+    const w = 5.2 * scale;
+    const d = 3.8 * scale;
+    const h = 2.15 * scale;
+    const parts = [box(w, h, d, 0, h / 2 + 0.4, 0), gable(w * 1.06, 1.05 * scale, d * 1.1, 0, h + 0.4, 0)];
     // pilotis courts : la cabane ne touche pas la vase
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) parts.push(box(0.22, 1.1, 0.22, (sx * w) / 2.6, 0.3, (sz * d) / 2.6));
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) parts.push(box(0.2, 0.9, 0.2, (sx * w) / 2.6, 0.25, (sz * d) / 2.6));
     const cabin = built(parts, 'cabane-ostreicole', 0.15);
     const y = groundAt(x, z);
     cabin.position.set(x, y, z);
     cabin.rotation.y = ry;
     group.add(cabin);
 
-    const win = windows([[1.1 * scale, 0.9 * scale, 0, h * 0.62 + 0.5, (-d / 2) * 1.01, Math.PI]]);
+    const win = windows([[0.9 * scale, 0.75 * scale, 0, h * 0.6 + 0.4, (-d / 2) * 1.01, Math.PI]]);
     win.position.copy(cabin.position);
     win.rotation.y = ry;
     group.add(win);
