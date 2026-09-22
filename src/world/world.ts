@@ -64,7 +64,12 @@ export class World {
     this.walk = new Walk(this.camera);
     window.addEventListener('pointermove', (e) => this.pointer.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1));
     window.addEventListener('pointerleave', () => this.pointer.set(-10, -10));
-    this.renderer.domElement.addEventListener('pointerdown', (e) => this.throwStone(e));
+    // Le clic est écouté sur la fenêtre, pas sur le canvas : la section de défilement le
+    // recouvre entièrement, et aucun clic ne lui parvenait jamais.
+    window.addEventListener('pointerdown', (e) => {
+      if ((e.target as HTMLElement | null)?.closest('a, button, #apropos')) return;
+      this.throwStone(e);
+    });
     new ResizeObserver(() => this.resize()).observe(host);
   }
 
