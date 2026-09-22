@@ -49,6 +49,16 @@ const GAZE: Record<string, Gaze[]> = {
     { at: 0.75, yaw: 0.2, pitch: 0.05, eye: 1.65 },
     { at: 1.0, yaw: 0.0, pitch: 0.06, eye: 1.9 },
   ],
+  airial: [
+    { at: 0.0, yaw: 0.15, pitch: 0.02, eye: 1.65 },
+    { at: 0.5, yaw: -0.2, pitch: 0.06, eye: 1.7 }, // les chênes de l'airial s'ouvrent
+    { at: 1.0, yaw: 0.0, pitch: 0.03, eye: 1.7 }, // la maison, la lampe allumée
+  ],
+  village: [
+    { at: 0.0, yaw: -0.2, pitch: 0.0, eye: 1.7 },
+    { at: 0.45, yaw: 0.28, pitch: -0.02, eye: 1.7 }, // la rangée de cabanes, à main gauche
+    { at: 1.0, yaw: -0.12, pitch: 0.02, eye: 1.75 }, // le ponton qui part vers le large
+  ],
   marais: [
     { at: 0.0, yaw: -0.05, pitch: 0.0, eye: 1.65 },
     { at: 0.35, yaw: 0.22, pitch: -0.16, eye: 1.55 }, // on surveille où l'on met les pieds

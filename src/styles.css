@@ -53,7 +53,7 @@ button { font: inherit; color: inherit; }
 
 /* ───────── Chapitres ───────── */
 /* la balade fait maintenant le double : la hauteur de page suit, sinon on la traverse au pas de course */
-.walk { position: relative; z-index: 2; height: 2100vh; }
+.walk { position: relative; z-index: 2; height: 2500vh; }
 .chapters { position: fixed; left: clamp(20px, 6vw, 96px); bottom: clamp(120px, 20vh, 220px); width: min(520px, 80vw); z-index: 3; pointer-events: none; }
 .chapter { position: absolute; left: 0; bottom: 0; width: 100%; visibility: hidden; }
 .chapter.on { visibility: visible; }

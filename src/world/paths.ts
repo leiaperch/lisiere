@@ -93,6 +93,29 @@ const TO_DELTA: [number, number][] = [
   [146, -156],
 ];
 
+// et débouche sur l'airial : la clairière habitée, sous les chênes
+// On s'arrête à une quinzaine de mètres de la maison, face à elle : arriver dessus, puis la
+// dépasser, ne laissait rien à regarder.
+const TO_AIRIAL: [number, number][] = [
+  [146, -156],
+  [158, -152],
+  [170, -148],
+  [178, -144],
+  [184, -140],
+  [186, -142],
+  [186, -136],
+];
+
+// côté bassin, le sentier longe la rive jusqu'au village ostréicole
+const TO_VILLAGE: [number, number][] = [
+  [78, -239],
+  [94, -243],
+  [110, -246],
+  [124, -250],
+  [136, -255],
+  [147, -260],
+];
+
 function segment(id: string, biome: BiomeId, pts: [number, number][], next: string[] = []): Segment {
   const c = curve(pts);
   return { id, biome, curve: c, length: c.getLength(), next };
@@ -102,9 +125,11 @@ export const SEGMENTS: Record<string, Segment> = {
   vigne: segment('vigne', 'vigne', VINES, ['approche']),
   approche: segment('approche', 'foret', APPROACH, ['cote', 'marais']),
   cote: segment('cote', 'dune', TO_COAST, ['bassin']),
-  bassin: segment('bassin', 'bassin', TO_BASIN),
+  bassin: segment('bassin', 'bassin', TO_BASIN, ['village']),
+  village: segment('village', 'bassin', TO_VILLAGE),
   marais: segment('marais', 'marais', TO_MARSH, ['delta']),
-  delta: segment('delta', 'delta', TO_DELTA),
+  delta: segment('delta', 'delta', TO_DELTA, ['airial']),
+  airial: segment('airial', 'foret', TO_AIRIAL),
 };
 
 export const START = 'vigne';

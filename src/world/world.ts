@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { KEYS, setDaylight, state, world } from './light';
-import { LAKE, createTerrain, heightAt, paintBiomes } from './terrain';
+import { BASSIN, LAKE, createTerrain, heightAt, paintBiomes } from './terrain';
 import { CHOICES, FORK, FORK_AT, TIME_RATE, branchHeading, branchTarget } from './paths';
-import { createForest, paintGround, plantForest } from './forest';
+import { createForest, createPots, paintGround, plantForest } from './forest';
 import { createGrass } from './grass';
 import { createFireflies, createLake, createMarshWater, createOcean, createSky, type Lake } from './sky';
 import { Birds } from './fauna';
@@ -14,6 +14,7 @@ import { SunShadow, type Caster } from './shadow';
 import { createCrasteBanks, createCrasteWater, createDeck } from './craste';
 import { createBasinWater, createCabane, createEstey, createEsteyWater, createPignots } from './bassin';
 import { createAlders, createDeltaBanks, createDeltaWater } from './delta';
+import { createAirial, createVillage } from './endings';
 import { Post } from './post';
 import { Walk } from './walk';
 
@@ -28,7 +29,7 @@ export class World {
   readonly camera = new THREE.PerspectiveCamera(52, 1, 0.1, 900);
   readonly walk: Walk;
   readonly post: Post;
-  readonly stats = { frames: 0, triangles: 0, calls: 0, trees: 0, blades: 0, undergrowth: 0, vines: 0, alders: 0 };
+  readonly stats = { frames: 0, triangles: 0, calls: 0, trees: 0, blades: 0, undergrowth: 0, vines: 0, alders: 0, pots: 0 };
   private fireflies!: THREE.Points;
   private lake!: Lake;
   private birds!: Birds;
@@ -105,6 +106,9 @@ export class World {
     this.stats.trees = trees.length;
     const forestGroup = createForest(trees);
     this.scene.add(forestGroup);
+    const pots = createPots(trees);
+    this.stats.pots = pots.count;
+    this.scene.add(pots.mesh);
     // ombres peintes au loin, pour le soleil de 19 h 50, quand elles sont les plus longues
     setDaylight(0.12);
     const painted = paintGround(trees, world.uSunDir.value.clone());
@@ -157,7 +161,9 @@ export class World {
     this.stats.alders = alders.count;
     this.delta = new THREE.Group();
     this.delta.add(createDeltaBanks((x, z) => heightAt(x, z)), createDeltaWater(), alders.mesh);
+    this.delta.add(createAirial((x, z) => heightAt(x, z)));
     this.scene.add(this.delta);
+    this.basin.add(createVillage((x, z) => heightAt(x, z), BASSIN.level));
 
     progress(0.82, 'Oiseaux, aigrettes et pissenlits');
     await step();

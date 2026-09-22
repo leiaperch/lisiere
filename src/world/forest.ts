@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { CLEARING, DUNE, LAKE, MARSH, coastMask, fbm, heightAt } from './terrain';
+import { AIRIAL } from './endings';
 import { biomeAt, trailDistance } from './paths';
 import { CRASTE, crasteDistance } from './craste';
 import { glslNoise, glslWorld, world } from './light';
@@ -15,6 +16,8 @@ export interface Tree {
   scale: number;
   kind: 0 | 1 | 2 | 3; // 0 conifère, 1 feuillu, 2 tronc mort, 3 pin maritime
   hue: number;
+  /** arbre gemmé : il porte une care et un pot de résine à son pied */
+  gem: number;
 }
 
 // graine déterministe : la forêt est la même à chaque visite
@@ -36,6 +39,7 @@ export function plantForest(): Tree[] {
     const dl = Math.hypot(x - LAKE.x, z - LAKE.z);
     const dm = Math.hypot(x - MARSH.x, z - MARSH.z);
     if (dc < CLEARING.radius * (0.9 + rand() * 0.3)) continue;
+    if (Math.hypot(x - AIRIAL.x, z - AIRIAL.z) < AIRIAL.radius * (0.95 + rand() * 0.35)) continue;
     if (dl < LAKE.radius * 1.1) continue;
     if (dm < MARSH.radius * 1.1) continue;
     if (crasteDistance(x, z) < CRASTE.bank + 2) continue;
@@ -68,7 +72,11 @@ export function plantForest(): Tree[] {
       kind = fbm(x * 0.02 + 40, z * 0.02) > 0.52 ? 1 : 0;
     }
     if (rand() > density) continue;
-    trees.push({ x, y: heightAt(x, z, dTrail), z, scale: (0.75 + rand() * 0.7) * small, kind, hue: rand() });
+    // Le gemmage : on entaillait les pins le long des pistes pour en faire couler la résine.
+    // Seuls les pins et les conifères en portent, et seulement à portée du sentier — un gemmeur
+    // ne va pas saigner un arbre qu'il ne peut pas venir vider.
+    const gem = (kind === 0 || kind === 3) && biome !== 'marais' && dTrail < 34 && rand() < 0.62 ? 1 : 0;
+    trees.push({ x, y: heightAt(x, z, dTrail), z, scale: (0.75 + rand() * 0.7) * small, kind, hue: rand(), gem });
   }
   return trees;
 }
@@ -207,6 +215,7 @@ const vertex = /* glsl */ `
   attribute float aPart;
   attribute float aHeight;
   attribute vec2 aVar; // x : teinte, y : phase du vent
+  attribute vec2 aGem; // x : arbre gemmé, y : orientation de la care
   uniform float uTime;
   uniform float uWind;
   varying vec3 vWorld;
@@ -215,6 +224,7 @@ const vertex = /* glsl */ `
   varying float vHeight;
   varying vec2 vVar;
   varying vec3 vLocal;
+  varying vec2 vGem;
   void main(){
     vec3 p = position;
     // le houppier ondule au vent, le tronc reste planté
@@ -227,6 +237,7 @@ const vertex = /* glsl */ `
     vPart = aPart;
     vHeight = aHeight;
     vVar = aVar;
+    vGem = aGem;
     vLocal = position;
     gl_Position = projectionMatrix * viewMatrix * w;
   }
@@ -243,6 +254,7 @@ const fragment = /* glsl */ `
   varying float vHeight;
   varying vec2 vVar;
   varying vec3 vLocal;
+  varying vec2 vGem;
   void main(){
     vec3 n = normalize(vNormal);
     vec3 v = normalize(cameraPosition - vWorld);
@@ -251,8 +263,18 @@ const fragment = /* glsl */ `
 
     vec3 albedo;
     if (vPart < 0.5) {
-      float bark = fbm(vec2(atan(vLocal.x, vLocal.z) * 3.0, vLocal.y * 5.0));
+      float angle = atan(vLocal.x, vLocal.z);
+      float bark = fbm(vec2(angle * 3.0, vLocal.y * 5.0));
       albedo = mix(vec3(0.12, 0.08, 0.06), vec3(0.24, 0.17, 0.11), bark);
+      // La care : une bande d'écorce enlevée, montant du pied vers la cime, entaillée de
+      // chevrons obliques. C'est le bois nu qui apparaît, bien plus clair que l'écorce.
+      float face = cos(angle - vGem.y * 6.28);
+      float band = smoothstep(0.86, 0.97, face) * vGem.x;
+      band *= smoothstep(0.35, 0.8, vLocal.y) * (1.0 - smoothstep(3.4, 4.6, vLocal.y));
+      vec3 wood = mix(vec3(0.44, 0.34, 0.22), vec3(0.62, 0.50, 0.34), bark);
+      // les coups de hapchot laissent des traits en travers, tous les quelques centimètres
+      float cuts = smoothstep(0.55, 0.9, abs(sin(vLocal.y * 26.0 + angle * 2.0)));
+      albedo = mix(albedo, mix(wood, wood * 0.62, cuts), band);
     } else {
       float clump = fbm(vLocal.xz * 1.3 + vLocal.y * 0.8 + vVar.x * 10.0);
       albedo = mix(uLeaf, uLeafWarm, vVar.x * 0.6 + clump * 0.4);
@@ -289,6 +311,7 @@ export function createForest(trees: Tree[]) {
   kinds.forEach((geo, kind) => {
     const list = trees.filter((t) => t.kind === kind);
     const variation = new Float32Array(list.length * 2);
+    const gemmage = new Float32Array(list.length * 2); // x : gemmé ou non, y : orientation de la care
     const mat = new THREE.ShaderMaterial({
       uniforms: { ...world, uLeaf: { value: new THREE.Color(palettes[kind][0]) }, uLeafWarm: { value: new THREE.Color(palettes[kind][1]) } },
       vertexShader: vertex,
@@ -304,8 +327,11 @@ export function createForest(trees: Tree[]) {
       mesh.setMatrixAt(i, dummy.matrix);
       variation[i * 2] = t.hue;
       variation[i * 2 + 1] = (t.x * 0.13 + t.z * 0.07) % 1;
+      gemmage[i * 2] = t.gem;
+      gemmage[i * 2 + 1] = (t.x * 0.37 + t.z * 0.21) % 1;
     });
     geo.setAttribute('aVar', new THREE.InstancedBufferAttribute(variation, 2));
+    geo.setAttribute('aGem', new THREE.InstancedBufferAttribute(gemmage, 2));
     mesh.frustumCulled = false;
     group.add(mesh);
   });
@@ -369,4 +395,63 @@ export function paintGround(trees: Tree[], sunDir: THREE.Vector3) {
     return tex;
   };
   return { shadow: make(shadow), forest: make(forest) };
+}
+
+/**
+ * Les pots de résine, cloués sous la care. Inventés en 1840, ils ont remplacé le creuset taillé
+ * dans le sol et donné à la forêt landaise sa silhouette la plus reconnaissable : des milliers de
+ * troncs balafrés, chacun avec sa poterie au pied.
+ */
+export function createPots(trees: Tree[]) {
+  const gemmed = trees.filter((t) => t.gem > 0.5);
+  const pot = new THREE.CylinderGeometry(0.1, 0.065, 0.14, 7, 1, true);
+  pot.translate(0, 0.07, 0);
+  const geo = pot.toNonIndexed();
+  geo.deleteAttribute('uv');
+  geo.computeVertexNormals();
+
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { ...world },
+    side: THREE.DoubleSide,
+    vertexShader: /* glsl */ `
+      varying vec3 vWorld;
+      varying vec3 vNormal;
+      void main(){
+        vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0);
+        vWorld = w.xyz;
+        vNormal = normalize(mat3(instanceMatrix) * normal);
+        gl_Position = projectionMatrix * viewMatrix * w;
+      }`,
+    fragmentShader: /* glsl */ `
+      ${glslNoise}
+      ${glslWorld}
+      varying vec3 vWorld;
+      varying vec3 vNormal;
+      void main(){
+        vec3 n = normalize(vNormal);
+        if (!gl_FrontFacing) n = -n;
+        // terre cuite, salie de résine sur le bord
+        float grain = fbm(vWorld.xz * 9.0);
+        vec3 albedo = mix(vec3(0.30, 0.16, 0.10), vec3(0.44, 0.26, 0.17), grain);
+        float ndl = max(dot(n, uSunDir), 0.0);
+        vec3 col = albedo * (uSunColor * ndl * 0.7 + mix(uSkyHorizon, uSkyTop, 0.5) * uAmbient + lantern(vWorld, n));
+        gl_FragColor = vec4(applyFog(col, vWorld, cameraPosition), 1.0);
+      }`,
+  });
+
+  const mesh = new THREE.InstancedMesh(geo, mat, gemmed.length);
+  const dummy = new THREE.Object3D();
+  gemmed.forEach((t, i) => {
+    // le pot est cloué du côté de la care, contre le tronc
+    const a = ((t.x * 0.37 + t.z * 0.21) % 1) * Math.PI * 2;
+    const r = (t.kind === 3 ? 0.36 : 0.3) * t.scale;
+    dummy.position.set(t.x + Math.sin(a) * r, t.y + 0.34, t.z + Math.cos(a) * r);
+    dummy.rotation.set(0.1, a, 0);
+    dummy.scale.setScalar(0.9 + (i % 5) * 0.05);
+    dummy.updateMatrix();
+    mesh.setMatrixAt(i, dummy.matrix);
+  });
+  mesh.frustumCulled = false;
+  mesh.name = 'pots';
+  return { mesh, count: gemmed.length };
 }

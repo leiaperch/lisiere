@@ -4,6 +4,7 @@ import { BIOMES, SEGMENTS, biomeWeights, buildFields, trailDistance } from './pa
 import { CRASTE, crasteDistance, crasteProfile, deckHeight } from './craste';
 import { BASSIN, ESTEY_REACH, esteyDistance, esteyProfile } from './bassin';
 import { DELTA, DELTA_REACH, deltaDistance, deltaProfile } from './delta';
+import { AIRIAL } from './endings';
 
 export { BASSIN };
 
@@ -72,6 +73,10 @@ export function heightAt(x: number, z: number, dTrail = trailDistance(x, z)) {
   h -= drop;
   // les graves montent doucement au-dessus de la lisière : le vignoble domine la forêt
   h += vigne * (3.5 + THREE.MathUtils.smoothstep(z, 20, 140) * 9);
+
+  // l'airial est un replat herbeux, comme la clairière : on y bâtissait justement parce que c'est plat
+  const da = Math.hypot(x - AIRIAL.x, z - AIRIAL.z);
+  h = THREE.MathUtils.lerp(h, -2.6, 1 - THREE.MathUtils.smoothstep(da, AIRIAL.radius * 0.55, AIRIAL.radius * 1.35));
 
   // la clairière est un replat
   const dc = Math.hypot(x - CLEARING.x, z - CLEARING.z);
