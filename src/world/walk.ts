@@ -1,39 +1,62 @@
 import * as THREE from 'three';
-import { TRAIL, heightAt, trailPoint } from './terrain';
+import { heightAt } from './terrain';
+import { SEGMENTS, START, TOTAL_LENGTH, type Position, routePosition } from './paths';
 
-// La marche : la caméra avance sur le sentier à hauteur d'yeux. Le défilement choisit la position,
-// un amorti léger la rejoint. Le regard suit le chemin, avec des intentions par chapitre
-// (lever les yeux vers la canopée, se tourner vers la clairière, suivre les lucioles, s'arrêter au lac).
+// La marche : la caméra avance sur le sentier à hauteur d'yeux. Le défilement choisit la distance
+// parcourue, un amorti léger la rejoint. Le regard suit le chemin, avec des intentions par endroit
+// (lever les yeux vers la canopée, se tourner vers la clairière, s'arrêter au bout).
+//
+// Tant que la branche n'est pas choisie, la marche bute sur la fourche : on peut continuer à faire
+// défiler la page, le promeneur attend là, et repart dès qu'un chemin est pris.
 
 interface Gaze {
-  u: number;
+  at: number; // avancement dans le segment, 0 → 1
   yaw: number; // radians, positif vers la gauche
   pitch: number; // radians, positif vers le haut
   eye: number; // hauteur des yeux au-dessus du sol
 }
 
-const GAZE: Gaze[] = [
-  { u: 0.0, yaw: 0.18, pitch: 0.06, eye: 1.7 },
-  { u: 0.12, yaw: 0.05, pitch: 0.02, eye: 1.65 },
-  { u: 0.26, yaw: -0.12, pitch: 0.34, eye: 1.6 }, // sous-bois : on lève les yeux vers la canopée
-  { u: 0.36, yaw: 0.0, pitch: 0.05, eye: 1.65 },
-  { u: 0.47, yaw: -0.55, pitch: 0.02, eye: 1.7 }, // clairière, à droite du sentier
-  { u: 0.58, yaw: -0.2, pitch: 0.0, eye: 1.65 },
-  { u: 0.72, yaw: 0.35, pitch: -0.04, eye: 1.5 }, // lucioles dans l'herbe à gauche
-  { u: 0.86, yaw: 0.0, pitch: 0.02, eye: 1.65 },
-  { u: 1.0, yaw: -0.08, pitch: 0.06, eye: 2.4 }, // rive : on se redresse face au lac
-];
+const GAZE: Record<string, Gaze[]> = {
+  approche: [
+    { at: 0.0, yaw: 0.18, pitch: 0.06, eye: 1.7 },
+    { at: 0.2, yaw: 0.05, pitch: 0.02, eye: 1.65 },
+    { at: 0.42, yaw: -0.12, pitch: 0.34, eye: 1.6 }, // sous-bois : on lève les yeux vers la canopée
+    { at: 0.62, yaw: -0.5, pitch: 0.02, eye: 1.7 }, // clairière, sur la gauche du sentier
+    { at: 0.82, yaw: -0.1, pitch: 0.0, eye: 1.65 },
+    { at: 1.0, yaw: 0.0, pitch: 0.04, eye: 1.7 }, // la fourche : on regarde les deux chemins
+  ],
+  cote: [
+    { at: 0.0, yaw: 0.0, pitch: 0.02, eye: 1.65 },
+    { at: 0.35, yaw: 0.3, pitch: -0.02, eye: 1.6 }, // entre les pins, on regarde le sable arriver
+    { at: 0.68, yaw: -0.18, pitch: 0.14, eye: 1.7 }, // la montée de la dune
+    { at: 1.0, yaw: 0.0, pitch: -0.07, eye: 1.8 }, // la crête : la plage en contrebas, puis l'océan
+  ],
+  marais: [
+    { at: 0.0, yaw: -0.05, pitch: 0.0, eye: 1.65 },
+    { at: 0.35, yaw: 0.22, pitch: -0.16, eye: 1.55 }, // on surveille où l'on met les pieds
+    { at: 0.72, yaw: -0.28, pitch: 0.04, eye: 1.6 },
+    { at: 1.0, yaw: -0.06, pitch: 0.04, eye: 2.2 }, // la rive de l'étang
+  ],
+};
+
+const FLAT: Gaze = { at: 0, yaw: 0, pitch: 0.02, eye: 1.7 };
 
 export class Walk {
-  u = 0; // position visée (défilement)
-  current = 0; // position réelle, amortie
+  /** position visée, en mètres parcourus depuis le départ */
+  target = 0;
+  /** position réelle, amortie */
+  current = 0;
+  route: string[] = [START];
+  chosen: string | null = null;
   private yaw = 0;
   private pitch = 0;
   private eye = 1.7;
   private look = new THREE.Vector2(); // regard libre à la souris
   private lookTarget = new THREE.Vector2();
+  private here: Position = routePosition([START], 0);
+  private ahead: Position = routePosition([START], 0);
   private p = new THREE.Vector3();
-  private ahead = new THREE.Vector3();
+  private dir = new THREE.Vector3();
   private reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   private stride = 0;
 
@@ -43,48 +66,77 @@ export class Walk {
     });
   }
 
+  /** avancement global, 0 → 1 : pilote l'heure, le son et l'interface */
+  get progress() {
+    return THREE.MathUtils.clamp(this.current / TOTAL_LENGTH, 0, 1);
+  }
+
+  /** distance à laquelle la marche s'arrête tant qu'aucune branche n'est prise */
+  private get limit() {
+    return this.chosen ? TOTAL_LENGTH : SEGMENTS[START].length;
+  }
+
+  /** vrai quand le promeneur attend à la fourche */
+  get waiting() {
+    return !this.chosen && this.current > SEGMENTS[START].length - 14;
+  }
+
+  /** le défilement de la page, 0 → 1 */
+  set u(v: number) {
+    this.target = THREE.MathUtils.clamp(v, 0, 1) * TOTAL_LENGTH;
+  }
+
+  choose(id: string) {
+    if (this.chosen || !SEGMENTS[START].next.includes(id)) return;
+    this.chosen = id;
+    this.route = [START, id];
+  }
+
   // renvoie vrai tant que la caméra bouge encore
   update(dt: number) {
     const k = this.reduced ? 1 : 1 - Math.exp(-dt * 3.2);
     const before = this.current;
-    this.current += (this.u - this.current) * k;
+    const goal = Math.min(this.target, this.limit);
+    this.current += (goal - this.current) * k;
     const speed = Math.abs(this.current - before) / Math.max(dt, 1e-3);
 
+    routePosition(this.route, this.current, this.here);
+    routePosition(this.route, this.current + 2.2, this.ahead);
+
     // intentions du regard, interpolées en douceur entre les repères
-    const g = this.gazeAt(this.current);
+    const g = this.gazeAt(this.here);
     const kg = 1 - Math.exp(-dt * 2.4);
     this.yaw += (g.yaw - this.yaw) * kg;
     this.pitch += (g.pitch - this.pitch) * kg;
     this.eye += (g.eye - this.eye) * kg;
     this.look.lerp(this.lookTarget, 1 - Math.exp(-dt * 2));
 
-    trailPoint(this.current, this.p);
-    trailPoint(Math.min(this.current + 0.025, 1), this.ahead);
-    if (this.current > 0.975) {
-      // au bout du sentier, on regarde droit devant, vers le lac
-      TRAIL.getTangentAt(1, this.ahead).multiplyScalar(10).add(this.p);
-    }
+    this.p.copy(this.here.point);
     // pas : léger balancement proportionnel à la vitesse de marche
-    this.stride += speed * dt * 900;
-    const bob = this.reduced ? 0 : Math.min(speed * 60, 1) * 0.035;
+    this.stride += speed * dt * 110;
+    const bob = this.reduced ? 0 : Math.min(speed * 7, 1) * 0.035;
     const ground = heightAt(this.p.x, this.p.z, 0);
     this.camera.position.set(this.p.x + Math.cos(this.stride * 0.5) * bob * 0.6, ground + this.eye + Math.abs(Math.sin(this.stride)) * bob, this.p.z);
 
-    const dir = this.ahead.sub(this.p);
-    dir.y = 0;
-    dir.normalize();
-    const yaw = Math.atan2(-dir.x, -dir.z) + this.yaw + this.look.x;
+    // en bout de branche, on regarde dans l'axe du sentier plutôt que vers un point confondu
+    this.dir.copy(this.here.local > 0.99 ? this.here.tangent : this.ahead.point.clone().sub(this.p));
+    this.dir.y = 0;
+    if (this.dir.lengthSq() < 1e-6) this.dir.copy(this.here.tangent).setY(0);
+    this.dir.normalize();
+    const yaw = Math.atan2(-this.dir.x, -this.dir.z) + this.yaw + this.look.x;
     const pitch = this.pitch + this.look.y;
     this.camera.rotation.set(pitch, yaw, Math.sin(this.stride * 0.5) * bob * 0.05, 'YXZ');
-    return Math.abs(this.u - this.current) > 1e-5 || speed > 1e-4;
+    return Math.abs(goal - this.current) > 1e-3 || speed > 1e-3;
   }
 
-  private gazeAt(u: number) {
+  private gazeAt(pos: Position) {
+    const keys = GAZE[pos.segment.id];
+    if (!keys) return FLAT;
     let i = 0;
-    while (i < GAZE.length - 2 && u > GAZE[i + 1].u) i++;
-    const a = GAZE[i];
-    const b = GAZE[i + 1];
-    let k = THREE.MathUtils.clamp((u - a.u) / (b.u - a.u), 0, 1);
+    while (i < keys.length - 2 && pos.local > keys[i + 1].at) i++;
+    const a = keys[i];
+    const b = keys[i + 1];
+    let k = THREE.MathUtils.clamp((pos.local - a.at) / (b.at - a.at), 0, 1);
     k = k * k * (3 - 2 * k);
     return { yaw: a.yaw + (b.yaw - a.yaw) * k, pitch: a.pitch + (b.pitch - a.pitch) * k, eye: a.eye + (b.eye - a.eye) * k };
   }

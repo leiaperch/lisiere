@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { CLEARING, LAKE, fbm, heightAt, trailDistance } from './terrain';
+import { CLEARING, DUNE, LAKE, MARSH, coastMask, fbm, heightAt } from './terrain';
+import { biomeAt, trailDistance } from './paths';
 import { glslNoise, glslWorld, world } from './light';
 
 // La forêt : quelques milliers d'arbres en deux familles, placés une fois selon des règles
@@ -11,7 +12,7 @@ export interface Tree {
   y: number;
   z: number;
   scale: number;
-  kind: 0 | 1; // 0 conifère, 1 feuillu
+  kind: 0 | 1 | 2 | 3; // 0 conifère, 1 feuillu, 2 tronc mort, 3 pin maritime
   hue: number;
 }
 
@@ -24,22 +25,46 @@ const rand = () => {
 
 export function plantForest(): Tree[] {
   const trees: Tree[] = [];
-  const tries = 16000;
-  for (let i = 0; i < tries && trees.length < 2600; i++) {
-    const x = (rand() - 0.5) * 320;
-    const z = 60 - rand() * 320;
+  const tries = 30000;
+  for (let i = 0; i < tries && trees.length < 3200; i++) {
+    const x = (rand() - 0.5) * 380;
+    const z = 60 - rand() * 360;
     const dTrail = trailDistance(x, z);
     if (dTrail < 3.6 + rand() * 2) continue;
-    // lisière : la prairie du départ reste ouverte, quelques arbres isolés seulement
-    const meadow = THREE.MathUtils.smoothstep(z, -26, 2);
     const dc = Math.hypot(x - CLEARING.x, z - CLEARING.z);
     const dl = Math.hypot(x - LAKE.x, z - LAKE.z);
+    const dm = Math.hypot(x - MARSH.x, z - MARSH.z);
     if (dc < CLEARING.radius * (0.9 + rand() * 0.3)) continue;
-    if (dl < LAKE.radius * 1.12) continue;
-    const density = fbm(x * 0.03, z * 0.03) * 1.5 - meadow * 1.4 - (dTrail < 9 ? 0.15 : 0);
+    if (dl < LAKE.radius * 1.1) continue;
+    if (dm < MARSH.radius * 1.1) continue;
+
+    const biome = biomeAt(x, z);
+    const shore = coastMask(x, z);
+    // rien ne pousse sur le sable nu : la forêt s'arrête au pied de la dune
+    if (shore > 0.45 && z < DUNE.z + 34) continue;
+
+    const noise = fbm(x * 0.03, z * 0.03);
+    let density: number;
+    let kind: 0 | 1 | 2 | 3;
+    let small = 1;
+    if (biome === 'marais') {
+      // le marais n'a plus que des arbres clairsemés, et beaucoup de troncs morts debout
+      density = noise * 0.55;
+      kind = noise > 0.58 ? 1 : 2;
+      small = 0.85;
+    } else if (biome === 'dune') {
+      // la lisière landaise : des pins, de plus en plus rares et rabougris près du sable
+      density = noise * 1.35 * (1 - shore * 0.9);
+      kind = noise > 0.28 ? 3 : 0;
+      small = 0.7 + (1 - shore) * 0.45;
+    } else {
+      // la prairie du départ reste ouverte, quelques arbres isolés seulement
+      const meadow = THREE.MathUtils.smoothstep(z, -26, 2);
+      density = noise * 1.5 - meadow * 1.4 - (dTrail < 9 ? 0.15 : 0);
+      kind = fbm(x * 0.02 + 40, z * 0.02) > 0.52 ? 1 : 0;
+    }
     if (rand() > density) continue;
-    const kind: 0 | 1 = fbm(x * 0.02 + 40, z * 0.02) > 0.52 ? 1 : 0;
-    trees.push({ x, y: heightAt(x, z, dTrail), z, scale: 0.75 + rand() * 0.7, kind, hue: rand() });
+    trees.push({ x, y: heightAt(x, z, dTrail), z, scale: (0.75 + rand() * 0.7) * small, kind, hue: rand() });
   }
   return trees;
 }
@@ -83,6 +108,57 @@ function broadleaf() {
     jitter(b, r * 0.18);
     b.translate(x, y, z);
     tag(b, 1);
+    parts.push(b);
+  }
+  return finish(mergeGeometries(parts)!);
+}
+
+function pine() {
+  // pin maritime : long fût nu, houppier haut et étalé. C'est ce qui laisse passer la lumière
+  // rasante entre les troncs, et qui fait la silhouette d'une pinède landaise.
+  const parts: THREE.BufferGeometry[] = [];
+  const trunk = new THREE.CylinderGeometry(0.22, 0.42, 11, 7, 3, true);
+  jitter(trunk, 0.12);
+  trunk.translate(0, 5.5, 0);
+  tag(trunk, 0);
+  parts.push(trunk);
+  const blobs: [number, number, number, number][] = [
+    [0, 11.4, 0, 2.3],
+    [1.9, 10.6, 0.5, 1.7],
+    [-1.7, 10.9, -0.6, 1.6],
+    [0.4, 12.6, -1.2, 1.5],
+    [-0.6, 10.2, 1.7, 1.4],
+  ];
+  for (const [x, y, z, r] of blobs) {
+    const b = new THREE.IcosahedronGeometry(r, 2);
+    jitter(b, r * 0.3);
+    b.scale(1, 0.55, 1); // couronne aplatie par le vent
+    b.translate(x, y, z);
+    tag(b, 1);
+    parts.push(b);
+  }
+  const g = mergeGeometries(parts)!;
+  g.rotateZ(0.05);
+  return finish(g);
+}
+
+function snag() {
+  // un tronc mort debout : fût ébréché, deux moignons de branches, pas de feuillage
+  const parts: THREE.BufferGeometry[] = [];
+  const trunk = new THREE.CylinderGeometry(0.1, 0.34, 7.4, 6, 3, true);
+  jitter(trunk, 0.12);
+  trunk.translate(0, 3.6, 0);
+  tag(trunk, 0);
+  parts.push(trunk);
+  for (const [y, a, len] of [
+    [4.6, 0.7, 1.9],
+    [3.1, 3.9, 1.4],
+  ] as [number, number, number][]) {
+    const b = new THREE.CylinderGeometry(0.04, 0.12, len, 5, 1, true);
+    b.rotateZ(1.15);
+    b.rotateY(a);
+    b.translate(Math.cos(a) * 0.4, y, Math.sin(a) * 0.4);
+    tag(b, 0);
     parts.push(b);
   }
   return finish(mergeGeometries(parts)!);
@@ -198,10 +274,12 @@ const fragment = /* glsl */ `
 
 export function createForest(trees: Tree[]) {
   const group = new THREE.Group();
-  const kinds = [conifer(), broadleaf()];
+  const kinds = [conifer(), broadleaf(), snag(), pine()];
   const palettes: [string, string][] = [
     ['#10241a', '#2a4424'],
     ['#223a16', '#57601f'],
+    ['#2a2419', '#3a3327'],
+    ['#1b3018', '#3f5520'],
   ];
   const dummy = new THREE.Object3D();
   kinds.forEach((geo, kind) => {
@@ -247,7 +325,7 @@ export function paintGround(trees: Tree[], sunDir: THREE.Vector3) {
   const elev = Math.max(Math.asin(sunDir.y), 0.05);
   g.filter = 'blur(3px)';
   for (const t of trees) {
-    const height = (t.kind === 0 ? 11 : 8) * t.scale;
+    const height = (t.kind === 0 ? 11 : t.kind === 1 ? 8 : t.kind === 2 ? 7 : 14) * t.scale;
     const length = Math.min(height / Math.tan(elev), 46);
     const [px, pz] = toPx(t.x, t.z);
     const [qx, qz] = toPx(t.x + dir.x * length, t.z + dir.y * length);
@@ -255,7 +333,7 @@ export function paintGround(trees: Tree[], sunDir: THREE.Vector3) {
     grad.addColorStop(0, 'rgba(40,40,60,0.55)');
     grad.addColorStop(1, 'rgba(40,40,60,0)');
     g.strokeStyle = grad;
-    g.lineWidth = ((t.kind === 0 ? 3.2 : 4.4) * t.scale * size) / bw;
+    g.lineWidth = ((t.kind === 0 ? 3.2 : t.kind === 1 ? 4.4 : t.kind === 2 ? 1.6 : 3.8) * t.scale * size) / bw;
     g.lineCap = 'round';
     g.beginPath();
     g.moveTo(px, pz);

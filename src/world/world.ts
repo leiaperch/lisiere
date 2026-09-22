@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import { KEYS, setDaylight, state, world } from './light';
-import { LAKE, createTerrain, heightAt } from './terrain';
+import { LAKE, createTerrain, heightAt, paintBiomes } from './terrain';
+import { CHOICES, FORK, FORK_AT, TIME_RATE, branchHeading, branchTarget } from './paths';
 import { createForest, paintGround, plantForest } from './forest';
 import { createGrass } from './grass';
-import { createFireflies, createLake, createSky, type Lake } from './sky';
+import { createFireflies, createLake, createMarshWater, createOcean, createSky, type Lake } from './sky';
 import { Birds } from './fauna';
 import { Dandelions } from './flora';
 import { createUndergrowth } from './undergrowth';
@@ -29,9 +30,16 @@ export class World {
   private dandelions!: Dandelions;
   private pointerRay: THREE.Ray | null = null;
   private shadow!: SunShadow;
+  private terrainMat!: THREE.ShaderMaterial;
+  private ocean!: THREE.Mesh;
+  private bog!: THREE.Mesh;
+  private choice: string | null = null;
+  private choiceGlow = 0;
   /** ce que le curseur survole : sert à changer le curseur de la page */
-  hover: 'bird' | 'flower' | 'water' | null = null;
-  onHover?: (what: 'bird' | 'flower' | 'water' | null) => void;
+  hover: 'bird' | 'flower' | 'water' | 'path' | null = null;
+  onHover?: (what: 'bird' | 'flower' | 'water' | 'path' | null) => void;
+  /** appelé quand le promeneur s'engage sur une branche */
+  onChoose?: (id: string) => void;
   onBirds?: () => void;
   onBlow?: () => void;
   onSplash?: () => void;
@@ -65,6 +73,8 @@ export class World {
     progress(0.08, 'Relief et sentier');
     await step();
     const { mesh: terrain, material: terrainMat } = createTerrain();
+    this.terrainMat = terrainMat;
+    terrainMat.uniforms.uBiome.value = paintBiomes();
     this.scene.add(terrain);
 
     progress(0.3, 'Plantation des arbres');
@@ -93,13 +103,17 @@ export class World {
     this.stats.blades = (grass.geometry as THREE.InstancedBufferGeometry).instanceCount;
     this.scene.add(grass);
 
-    progress(0.75, 'Ciel, lac et lucioles');
+    progress(0.75, 'Ciel, eaux et lucioles');
     await step();
     this.scene.add(createSky());
     this.fireflies = createFireflies();
     this.scene.add(this.fireflies);
     this.lake = createLake(this.dpr);
     this.scene.add(this.lake.mesh);
+    this.bog = createMarshWater();
+    this.scene.add(this.bog);
+    this.ocean = createOcean();
+    this.scene.add(this.ocean);
 
     progress(0.82, 'Oiseaux et pissenlits');
     await step();
@@ -143,6 +157,13 @@ export class World {
     this.renderer.setAnimationLoop(() => this.frame());
   }
 
+  /** heure de la balade : elle ralentit sur la branche du littoral, pour finir au couchant */
+  private daylightAt(t: number) {
+    if (t <= FORK_AT) return t;
+    const rate = TIME_RATE[this.walk.route[1]] ?? 1;
+    return FORK_AT + (t - FORK_AT) * rate;
+  }
+
   // position dans la balade, 0 → 1, donnée par le défilement
   setProgress(u: number) {
     this.walk.u = THREE.MathUtils.clamp(u, 0, 1);
@@ -172,8 +193,12 @@ export class World {
     if (document.hidden) return;
 
     this.walk.update(dt);
-    const t = this.walk.current;
-    setDaylight(t);
+    const t = this.walk.progress;
+    setDaylight(this.daylightAt(t));
+    // chaque branche a son air : épais et chargé d'humidité au marais, lavé par le large sur la côte
+    const advance = THREE.MathUtils.smoothstep(t, FORK_AT, FORK_AT + 0.28);
+    if (this.walk.route[1] === 'marais') world.uFogDensity.value *= 1 + advance * 0.9;
+    else if (this.walk.route[1] === 'cote') world.uFogDensity.value *= 1 - advance * 0.55;
     world.uTime.value = time;
     this.post.uniforms.uTime.value = time;
     this.post.uniforms.uExposure.value = state.exposure;
@@ -191,8 +216,9 @@ export class World {
     const overBird = this.birds.update(dt, time, this.camera, this.pointerRay);
     this.dandelions.setPixel(ff.uniforms.uPixel.value);
     const overFlower = this.dandelions.update(time, this.pointerRay);
-    const overWater = !!this.pointerRay && t > 0.86 && this.stonePoint() !== null;
-    const hover = overBird ? 'bird' : overFlower ? 'flower' : overWater ? 'water' : null;
+    const overWater = !!this.pointerRay && this.atLake && this.stonePoint() !== null;
+    this.updateChoice(dt);
+    const hover = this.choice ? 'path' : overBird ? 'bird' : overFlower ? 'flower' : overWater ? 'water' : null;
     if (hover !== this.hover) {
       this.hover = hover;
       this.onHover?.(hover);
@@ -202,8 +228,13 @@ export class World {
     this.shadow.update(this.renderer, this.camera, world.uSunDir.value);
     this.updateRays();
 
-    // le lac ne coûte un second rendu que lorsqu'il est dans le champ
-    this.lake.mesh.visible = t > 0.8;
+    // chaque eau n'est dessinée que sur la branche où elle se trouve ; le lac, qui coûte un
+    // second rendu de la scène, n'apparaît qu'une fois sa rive en vue
+    const marsh = this.walk.route[1] === 'marais';
+    const coast = this.walk.route[1] === 'cote';
+    this.lake.mesh.visible = marsh && t > 0.8;
+    this.bog.visible = marsh && t > 0.6;
+    this.ocean.visible = coast && t > 0.6;
 
     // flou de respiration : monte vite, redescend lentement
     this.blurTween = Math.max(0, this.blurTween - dt * 1.4);
@@ -230,12 +261,57 @@ export class World {
     return d < LAKE_R ? this.stone : null;
   }
 
+  /** vrai quand le promeneur est assez près de l'étang pour lancer une pierre */
+  private get atLake() {
+    return this.walk.route[1] === 'marais' && this.walk.progress > 0.86;
+  }
+
   private throwStone() {
-    if (this.walk.current < 0.86) return;
+    if (this.choice) {
+      // au lieu de lancer une pierre, le clic engage sur le chemin survolé
+      const id = this.choice;
+      this.walk.choose(id);
+      this.choice = null;
+      this.onChoose?.(id);
+      return;
+    }
+    if (!this.atLake) return;
     const p = this.stonePoint();
     if (!p) return;
     this.lake.ripple(p.x, p.z, this.clock.getElapsed());
     this.onSplash?.();
+  }
+
+  // À la fourche, on ne met pas de texte à l'écran : le sentier survolé s'éclaire, et le curseur
+  // annonce l'action comme il le fait pour les oiseaux ou les pissenlits.
+  private branchPoint = new THREE.Vector3();
+  private branchDir = new THREE.Vector3();
+  private updateChoice(dt: number) {
+    const uChoice = this.terrainMat.uniforms.uChoice.value as THREE.Vector4;
+    let found: string | null = null;
+    if (this.walk.waiting && this.pointer.x > -2) {
+      // la matrice de la caméra date de l'image précédente : on la remet à jour avant de projeter
+      this.camera.updateMatrixWorld();
+      let best = 0.17;
+      for (const id of CHOICES) {
+        branchTarget(id, 26, this.branchPoint);
+        this.branchPoint.y = heightAt(this.branchPoint.x, this.branchPoint.z, 0) + 1.2;
+        this.branchPoint.project(this.camera);
+        if (this.branchPoint.z > 1) continue;
+        const d = Math.hypot(this.branchPoint.x - this.pointer.x, this.branchPoint.y - this.pointer.y);
+        if (d < best) {
+          best = d;
+          found = id;
+        }
+      }
+    }
+    this.choice = found;
+    if (found) {
+      branchHeading(found, this.branchDir);
+      this.terrainMat.uniforms.uChoiceDir.value.set(this.branchDir.x, this.branchDir.z);
+    }
+    this.choiceGlow += ((found ? 1 : 0) - this.choiceGlow) * (1 - Math.exp(-dt * 6));
+    uChoice.set(FORK.x, FORK.z, 0, this.choiceGlow);
   }
 
   // rayons : actifs quand le soleil est au-dessus de l'horizon et devant le promeneur

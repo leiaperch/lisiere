@@ -1,12 +1,13 @@
 import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { CLEARING, LAKE, fbm, heightAt, trailDistance } from './terrain';
+import { CLEARING, DUNE, LAKE, MARSH, coastMask, fbm, heightAt } from './terrain';
+import { type BiomeId, biomeAt, trailDistance } from './paths';
 import { glslNoise, glslWorld, world } from './light';
 
 // Le sous-bois : fougères, buissons, souches, troncs couchés et rochers. Cinq familles semées
 // selon des règles (densité de forêt, distance au sentier), chacune dessinée en une instance.
 
-export type Kind = 'fern' | 'bush' | 'stump' | 'log' | 'rock';
+export type Kind = 'fern' | 'bush' | 'stump' | 'log' | 'rock' | 'reed' | 'oyat';
 
 interface Piece {
   x: number;
@@ -95,6 +96,41 @@ function rock() {
   return [g];
 }
 
+function reed() {
+  // une touffe de roseaux : des joncs hauts et fins, quelques-uns coiffés d'un épi
+  const parts: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < 9; i++) {
+    const h = 1.1 + rand() * 1.1;
+    const blade = new THREE.PlaneGeometry(0.035, h, 1, 3);
+    blade.translate(0, h / 2, 0);
+    blade.rotateZ((rand() - 0.5) * 0.5);
+    blade.rotateY(rand() * Math.PI);
+    blade.translate((rand() - 0.5) * 0.45, 0, (rand() - 0.5) * 0.45);
+    parts.push(blade);
+    if (rand() > 0.55) {
+      const ear = new THREE.CylinderGeometry(0.035, 0.02, 0.22, 5);
+      ear.translate(0, h + 0.08, 0);
+      parts.push(ear);
+    }
+  }
+  return parts;
+}
+
+function oyat() {
+  // oyat : la touffe qui tient la dune, des feuilles raides en éventail
+  const parts: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < 11; i++) {
+    const h = 0.5 + rand() * 0.6;
+    const leaf = new THREE.PlaneGeometry(0.03, h, 1, 3);
+    leaf.translate(0, h / 2, 0);
+    leaf.rotateZ((rand() - 0.5) * 1.1);
+    leaf.rotateY(rand() * Math.PI * 2);
+    leaf.translate((rand() - 0.5) * 0.2, 0, (rand() - 0.5) * 0.2);
+    parts.push(leaf);
+  }
+  return parts;
+}
+
 function jitter(g: THREE.BufferGeometry, amount: number) {
   const p = g.attributes.position as THREE.BufferAttribute;
   for (let i = 0; i < p.count; i++) {
@@ -122,12 +158,14 @@ function build(parts: THREE.BufferGeometry[]) {
 
 // ───────────── semis ─────────────
 
-const RULES: Record<Kind, { count: number; near: [number, number]; forest: number; scale: [number, number]; clearing: boolean }> = {
-  fern: { count: 900, near: [1.6, 30], forest: 0.5, scale: [0.7, 1.5], clearing: false },
-  bush: { count: 420, near: [2.2, 34], forest: 0.35, scale: [0.8, 1.7], clearing: true },
-  stump: { count: 90, near: [2.6, 26], forest: 0.45, scale: [0.7, 1.3], clearing: true },
-  log: { count: 70, near: [3, 28], forest: 0.45, scale: [0.7, 1.2], clearing: false },
-  rock: { count: 260, near: [1.2, 32], forest: 0, scale: [0.5, 1.6], clearing: true },
+const RULES: Record<Kind, { count: number; near: [number, number]; forest: number; scale: [number, number]; clearing: boolean; biomes: BiomeId[] }> = {
+  fern: { count: 820, near: [1.6, 30], forest: 0.5, scale: [0.7, 1.5], clearing: false, biomes: ['foret', 'marais'] },
+  bush: { count: 380, near: [2.2, 34], forest: 0.35, scale: [0.8, 1.7], clearing: true, biomes: ['foret'] },
+  stump: { count: 110, near: [3.2, 26], forest: 0.45, scale: [0.7, 1.3], clearing: true, biomes: ['foret', 'marais'] },
+  log: { count: 90, near: [3, 28], forest: 0.45, scale: [0.7, 1.2], clearing: false, biomes: ['foret', 'marais'] },
+  rock: { count: 300, near: [2.2, 32], forest: 0, scale: [0.5, 1.6], clearing: true, biomes: ['foret'] },
+  reed: { count: 900, near: [1.1, 26], forest: 0, scale: [0.7, 1.6], clearing: true, biomes: ['marais'] },
+  oyat: { count: 1500, near: [1.0, 42], forest: 0, scale: [0.7, 1.6], clearing: true, biomes: ['dune'] },
 };
 
 function sow(kind: Kind): Piece[] {
@@ -139,11 +177,16 @@ function sow(kind: Kind): Piece[] {
     const d = trailDistance(x, z);
     if (d < rule.near[0] || d > rule.near[1]) continue;
     if (Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.radius * 1.05) continue;
+    if (Math.hypot(x - MARSH.x, z - MARSH.z) < MARSH.radius * 0.92) continue;
     const inClearing = Math.hypot(x - CLEARING.x, z - CLEARING.z) < CLEARING.radius;
     if (inClearing && !rule.clearing) continue;
+    if (!rule.biomes.includes(biomeAt(x, z))) continue;
+    // la plage reste nue : seuls les oyats tiennent le haut de la dune
+    if (coastMask(x, z) > 0.35 && (kind !== 'oyat' || z < DUNE.z - 4)) continue;
     // les fougères et les buissons suivent la densité de la forêt, les rochers non
     const cover = fbm(x * 0.03, z * 0.03);
     if (rule.forest > 0 && cover < rule.forest && rand() > 0.25) continue;
+    if (kind === 'rock' && biomeAt(x, z) === 'foret' && rand() > 0.3) continue;
     out.push({ x, z, y: heightAt(x, z, d), scale: rule.scale[0] + rand() * (rule.scale[1] - rule.scale[0]), rot: rand() * Math.PI * 2, tint: rand() });
   }
   return out;
@@ -155,6 +198,8 @@ const PALETTES: Record<Kind, [string, string]> = {
   stump: ['#241a12', '#3f3124'],
   log: ['#211a14', '#3a2e22'],
   rock: ['#2f3034', '#5a5b5e'],
+  reed: ['#3d4420', '#6e7038'],
+  oyat: ['#4a5442', '#8d9070'],
 };
 
 const vertex = /* glsl */ `
@@ -218,6 +263,8 @@ export function createUndergrowth() {
     stump: build(stump()),
     log: build(log()),
     rock: build(rock()),
+    reed: build(reed()),
+    oyat: build(oyat()),
   };
   const dummy = new THREE.Object3D();
   const counts: Record<string, number> = {};
@@ -231,8 +278,8 @@ export function createUndergrowth() {
         ...world,
         uDark: { value: new THREE.Color(PALETTES[kind][0]) },
         uLight: { value: new THREE.Color(PALETTES[kind][1]) },
-        uSway: { value: kind === 'fern' || kind === 'bush' ? 1 : 0 },
-        uLeafy: { value: kind === 'fern' ? 1 : kind === 'bush' ? 0.6 : 0 },
+        uSway: { value: kind === 'reed' ? 1.8 : kind === 'oyat' ? 1.4 : kind === 'fern' || kind === 'bush' ? 1 : 0 },
+        uLeafy: { value: kind === 'fern' || kind === 'reed' ? 1 : kind === 'bush' ? 0.6 : kind === 'oyat' ? 0.9 : 0 },
       },
       vertexShader: vertex,
       fragmentShader: fragment,

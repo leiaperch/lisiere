@@ -7,6 +7,10 @@ export class Ambience {
   private master!: GainNode;
   private layers: Record<'wind' | 'birds' | 'crickets' | 'night' | 'water', GainNode> = {} as never;
   private windFilter!: BiquadFilterNode;
+  private waterFilter!: BiquadFilterNode;
+  private lapDepth!: GainNode;
+  private lapLfo!: OscillatorNode;
+  private branch: string | null = null;
   private t = 0;
   private timers: number[] = [];
   enabled = false;
@@ -33,7 +37,7 @@ export class Ambience {
     set(this.layers.birds, 1 - ramp(t, 0.35, 0.62));
     set(this.layers.crickets, ramp(t, 0.5, 0.75));
     set(this.layers.night, ramp(t, 0.78, 0.95));
-    set(this.layers.water, ramp(t, 0.82, 1));
+    set(this.layers.water, ramp(t, this.branch === 'cote' ? 0.6 : 0.82, 1));
     this.windFilter.frequency.setTargetAtTime(420 + (1 - t) * 380, now, 1);
   }
 
@@ -86,15 +90,15 @@ export class Ambience {
     const water = ctx.createBufferSource();
     water.buffer = this.pinkNoise(3);
     water.loop = true;
-    const wf = ctx.createBiquadFilter();
+    const wf = (this.waterFilter = ctx.createBiquadFilter());
     wf.type = 'bandpass';
     wf.frequency.value = 900;
     wf.Q.value = 0.8;
     const lap = ctx.createGain();
     lap.gain.value = 0.2;
-    const lapLfo = ctx.createOscillator();
+    const lapLfo = (this.lapLfo = ctx.createOscillator());
     lapLfo.frequency.value = 0.4;
-    const lapAmt = ctx.createGain();
+    const lapAmt = (this.lapDepth = ctx.createGain());
     lapAmt.gain.value = 0.18;
     lapLfo.connect(lapAmt).connect(lap.gain);
     water.connect(wf).connect(lap).connect(this.layers.water);
@@ -106,6 +110,50 @@ export class Ambience {
     this.every(() => this.cricket(), 160, 420);
     this.every(() => this.owl(), 7000, 14000);
     this.setProgress(this.t);
+    if (this.branch) this.setBranch(this.branch);
+  }
+
+  // La branche prise change l'eau que l'on entend : la respiration longue de l'océan d'un côté,
+  // le clapot d'un étang et les grenouilles de l'autre.
+  setBranch(branch: string) {
+    this.branch = branch;
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    if (branch === 'cote') {
+      this.waterFilter.frequency.setTargetAtTime(480, now, 2);
+      this.waterFilter.Q.setTargetAtTime(0.5, now, 2);
+      this.lapLfo.frequency.setTargetAtTime(0.11, now, 2);
+      this.lapDepth.gain.setTargetAtTime(0.5, now, 2);
+    } else {
+      this.waterFilter.frequency.setTargetAtTime(1100, now, 2);
+      this.lapLfo.frequency.setTargetAtTime(0.7, now, 2);
+      this.lapDepth.gain.setTargetAtTime(0.14, now, 2);
+      this.every(() => this.frog(), 2400, 6500);
+    }
+  }
+
+  // grenouille : deux coups de gorge courts, filtrés bas
+  private frog() {
+    const ctx = this.ctx;
+    if (!ctx || this.t < 0.55) return;
+    const now = ctx.currentTime;
+    for (let i = 0; i < 2 + Math.floor(Math.random() * 2); i++) {
+      const at = now + i * (0.16 + Math.random() * 0.08);
+      const o = ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(150 + Math.random() * 60, at);
+      o.frequency.exponentialRampToValueAtTime(90, at + 0.09);
+      const f = ctx.createBiquadFilter();
+      f.type = 'lowpass';
+      f.frequency.value = 700;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, at);
+      g.gain.exponentialRampToValueAtTime(0.09, at + 0.015);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + 0.12);
+      o.connect(f).connect(g).connect(this.layers.night);
+      o.start(at);
+      o.stop(at + 0.14);
+    }
   }
 
   private every(fn: () => void, min: number, max: number) {
