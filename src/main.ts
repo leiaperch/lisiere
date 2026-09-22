@@ -231,6 +231,7 @@ function setupMetrics(world: World) {
   out('trees').textContent = nf.format(world.stats.trees);
   out('blades').textContent = nf.format(world.stats.blades);
   out('under').textContent = nf.format(world.stats.undergrowth);
+  out('vines').textContent = nf.format(world.stats.vines);
   let last = performance.now();
   let frames = world.stats.frames;
   setInterval(() => {
