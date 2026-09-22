@@ -7,7 +7,6 @@
   --shade: rgba(20, 14, 8, 0.55); /* ombre portée derrière le texte */
   --serif: 'Newsreader', Georgia, serif;
   --sans: 'Hanken Grotesk', 'Helvetica Neue', Arial, sans-serif;
-  --hand: 'Caveat', cursive;
   --ease: cubic-bezier(0.25, 0.7, 0.2, 1);
 }
 
@@ -62,14 +61,6 @@ button { font: inherit; color: inherit; }
 .chapter-text { margin: 0; max-width: 34ch; font-size: clamp(16px, 1.25vw, 19px); line-height: 1.5; color: var(--ink); text-shadow: 0 1px 14px var(--shade); }
 .line-mask { display: block; overflow: hidden; padding-bottom: 0.08em; margin-bottom: -0.08em; }
 
-/* ───────── Carnet de terrain ───────── */
-.notebook { position: fixed; z-index: 3; right: clamp(20px, 4vw, 56px); top: 96px; width: 250px; pointer-events: none; }
-.notebook-head { margin: 0 0 10px; font-size: 13px; color: var(--ink-soft); border-bottom: 1px solid var(--ink-faint); padding-bottom: 8px; }
-.notebook ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-.notebook li { font: 500 21px/1.15 var(--hand); color: var(--ink); text-shadow: 0 1px 10px var(--shade); clip-path: inset(0 100% 0 0); }
-.notebook li small { display: block; font: 400 12px/1.4 var(--sans); color: var(--ink-soft); }
-.notebook li.past { color: var(--ink-soft); }
-
 /* ───────── Profil du sentier ───────── */
 .profile { position: fixed; z-index: 3; right: clamp(20px, 4vw, 56px); bottom: 34px; width: min(300px, 40vw); margin: 0; pointer-events: none; }
 .profile svg { width: 100%; height: 56px; display: block; overflow: visible; }
@@ -113,8 +104,6 @@ button { font: inherit; color: inherit; }
 .about-credit { margin: 80px 0 0; font-size: 13px; color: rgba(239, 232, 220, 0.5); }
 
 @media (max-width: 860px) {
-  .notebook { top: auto; bottom: 120px; right: 16px; width: 190px; }
-  .notebook li { font-size: 18px; }
   .chapters { bottom: auto; top: 110px; }
   .chapter-title { font-size: 56px; }
   .clock { font-size: 18px; }

@@ -11,7 +11,7 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%231b1712'/><path d='M4 22c6-1 8-6 12-6s6 5 12 6' stroke='%23f0c890' stroke-width='2' fill='none'/></svg>" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,300;6..72,400&family=Hanken+Grotesk:wght@400;500&family=Caveat:wght@500&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,300;6..72,400&family=Hanken+Grotesk:wght@400;500&display=swap" rel="stylesheet" />
   </head>
   <body>
     <a class="skip" href="#apropos">Aller à la présentation de la démo</a>
@@ -42,11 +42,6 @@
       <!-- longueur de la balade : le défilement fait avancer le promeneur -->
       <section class="walk" id="walk" aria-label="La balade"></section>
 
-      <!-- carnet de terrain : une ligne s'écrit à chaque chapitre -->
-      <aside class="notebook" id="notebook" aria-live="polite">
-        <p class="notebook-head">Carnet</p>
-        <ol id="notes"></ol>
-      </aside>
 
       <!-- profil du sentier : où en est la balade -->
       <figure class="profile" aria-label="Profil du sentier">
@@ -72,7 +67,7 @@
             <div><dt>Mouvement</dt><dd>Caméra à hauteur d'yeux, regard qui suit le sentier, vent en rafales dans l'herbe et les arbres, respiration de l'objectif d'une étape à l'autre.</dd></div>
             <div><dt>Rencontres</dt><dd>Les oiseaux s'envolent quand on approche, les pissenlits se défont au passage du curseur, les lucioles tournent autour de la lanterne, et un clic sur le lac fait des ricochets.</dd></div>
             <div><dt>Son</dt><dd>Vent, oiseaux, grillons, chouette et clapotis synthétisés avec Web Audio. Chaque couche suit l'heure de la balade.</dd></div>
-            <div><dt>Page</dt><dd>Le chargement dessine le profil du sentier, l'interface prend la couleur de l'heure, le carnet s'écrit au fil de la balade.</dd></div>
+            <div><dt>Page</dt><dd>Le chargement dessine le profil du sentier, l'interface prend la couleur de l'heure, l'horloge et l'altitude suivent la marche.</dd></div>
             <div><dt>Mesures</dt><dd><span data-live="trees">–</span> arbres, <span data-live="blades">–</span> brins d'herbe, <span data-live="calls">–</span> appels de dessin par image, <span data-live="fps">–</span> images/s.</dd></div>
           </dl>
           <p class="about-stack">Three.js, GLSL, GSAP, Web Audio, TypeScript, Vite.</p>

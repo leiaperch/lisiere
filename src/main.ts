@@ -9,15 +9,6 @@ import { Ambience } from './sound';
 const $ = <T extends HTMLElement>(s: string) => document.querySelector<T>(s)!;
 const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-// ce que le promeneur note à chaque chapitre
-const NOTES = [
-  { species: 'Pinson des arbres, deux chants', place: 'lisière, prairie' },
-  { species: 'Pic épeiche, au loin', place: 'sous-bois de pins' },
-  { species: 'Chevreuil, bord nord', place: 'clairière' },
-  { species: 'Lucioles, une trentaine', place: 'herbes hautes' },
-  { species: 'Chouette hulotte', place: 'rive du lac' },
-];
-
 // ───────── profil du sentier, commun au chargement et à la carte ─────────
 const SAMPLES = 90;
 const profile = Array.from({ length: SAMPLES }, (_, i) => {
@@ -94,7 +85,6 @@ const STEPS = [
 
 function setupWalk(world: World) {
   const walkSection = $('#walk');
-  const notes = $('#notes');
   const live = $('#chapter-live');
   let active = -1;
 
@@ -104,13 +94,6 @@ function setupWalk(world: World) {
     active = i;
     live.textContent = `Étape ${i + 1} sur 5, ${STEPS[i].name}`;
     if (!first && !reduced) world.breathe();
-    const n = NOTES[i];
-    const li = document.createElement('li');
-    li.innerHTML = `${clockText(state.clock)} · ${n.species}<small>${n.place}, ${Math.round(state.temperature)} °C</small>`;
-    notes.append(li);
-    gsap.to(li, { clipPath: 'inset(0 0% 0 0)', duration: reduced ? 0 : 1.6, ease: 'none', delay: 0.4 });
-    notes.querySelectorAll('li').forEach((el, k, all) => el.classList.toggle('past', k < all.length - 1));
-    while (notes.children.length > 5) notes.firstElementChild!.remove();
   };
 
   const progress = () => {
