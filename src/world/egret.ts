@@ -22,6 +22,9 @@ interface Egret {
 
 const COUNT = 6;
 
+/** épaule : centre de rotation des ailes, partagé par la géométrie et le shader */
+const SHOULDER = [0.075, 0.66, -0.1] as const;
+
 function geometry() {
   const parts: THREE.BufferGeometry[] = [];
   // les primitives de three ne sont pas toutes indexées : on les ramène toutes au même format
@@ -34,54 +37,72 @@ function geometry() {
     parts.push(g);
   };
 
-  // corps : un fuseau allongé, porté haut sur les pattes
-  const body = new THREE.IcosahedronGeometry(0.2, 1);
-  body.scale(1, 0.85, 2.0);
-  body.translate(0, 0.62, 0);
+  // Corps : une sphère qu'on effile vers l'arrière pour obtenir le fuseau et la pointe de la
+  // queue. Une sphère mise à l'échelle donnait une boule, et l'oiseau ressemblait à un bonhomme.
+  const body = new THREE.IcosahedronGeometry(0.22, 2);
+  const bp = body.attributes.position as THREE.BufferAttribute;
+  for (let i = 0; i < bp.count; i++) {
+    const t = THREE.MathUtils.clamp((bp.getZ(i) + 0.22) / 0.44, 0, 1); // 0 poitrail, 1 queue
+    const taper = 1 - THREE.MathUtils.smoothstep(t, 0.42, 1) * 0.86;
+    bp.setXYZ(i, bp.getX(i) * 0.8 * taper, bp.getY(i) * 0.92 * taper, bp.getZ(i) * 1.85);
+  }
+  body.translate(0, 0.63, 0.06);
   tag(body, 0);
 
-  // cou en S : une suite de segments qui remontent puis avancent
-  const neck: [number, number, number][] = [
-    [0, 0.78, -0.16],
-    [0, 0.94, -0.26],
-    [0, 1.08, -0.3],
-    [0, 1.18, -0.24],
-    [0, 1.22, -0.14],
-  ];
-  for (const [x, y, z] of neck) {
-    const s = new THREE.IcosahedronGeometry(0.055, 0);
-    s.translate(x, y, z);
-    tag(s, 0);
-  }
-  const head = new THREE.IcosahedronGeometry(0.075, 1);
-  head.scale(1, 1, 1.35);
-  head.translate(0, 1.24, -0.06);
+  // Cou : un tube continu sur une courbe en S. En boules séparées, on voyait le chapelet.
+  const neckCurve = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(0, 0.72, -0.04),
+    new THREE.Vector3(0, 0.86, -0.15),
+    new THREE.Vector3(0, 1.02, -0.22),
+    new THREE.Vector3(0, 1.16, -0.2),
+    new THREE.Vector3(0, 1.24, -0.12),
+  ]);
+  tag(new THREE.TubeGeometry(neckCurve, 20, 0.04, 7, false), 0);
+
+  const head = new THREE.IcosahedronGeometry(0.068, 1);
+  head.scale(0.85, 0.85, 1.35);
+  head.translate(0, 1.26, -0.16);
   tag(head, 0);
-  const beak = new THREE.ConeGeometry(0.035, 0.28, 5);
+
+  // bec : long, droit, en poignard
+  const beak = new THREE.ConeGeometry(0.03, 0.34, 6);
   beak.rotateX(-Math.PI / 2);
-  beak.translate(0, 1.23, -0.22);
+  beak.rotateX(0.12);
+  beak.translate(0, 1.24, -0.38);
   tag(beak, 0);
 
-  // pattes : deux fils, à peine visibles mais qui donnent la hauteur
-  for (const x of [-0.06, 0.06]) {
-    const leg = new THREE.CylinderGeometry(0.014, 0.012, 0.62, 4);
-    leg.translate(x, 0.31, 0.04);
-    tag(leg, 0);
+  // Pattes : cuisse vers l'arrière, tarse vers l'avant, articulation marquée — c'est ce pli qui
+  // dit « échassier » plutôt que « figurine sur deux piquets ».
+  for (const x of [-0.055, 0.055]) {
+    const thigh = new THREE.CylinderGeometry(0.016, 0.014, 0.3, 5);
+    thigh.rotateX(-0.28);
+    thigh.translate(x, 0.47, 0.11);
+    tag(thigh, 0);
+    const tarsus = new THREE.CylinderGeometry(0.013, 0.011, 0.36, 5);
+    tarsus.rotateX(0.16);
+    tarsus.translate(x, 0.16, 0.14);
+    tag(tarsus, 0);
+    const foot = new THREE.BoxGeometry(0.05, 0.015, 0.14);
+    foot.translate(x, 0.005, 0.07);
+    tag(foot, 0);
   }
 
-  // ailes : deux longues plaques, repliées au repos, qui pivotent à l'envol
+  // Ailes, dessinées déployées : le repli est fait par le shader, qui les ramène le long du
+  // flanc au repos et les ouvre à l'envol.
   for (const side of [-1, 1]) {
     const w = new THREE.BufferGeometry();
-    const tip = 0.78 * side;
-    const pos = new Float32Array([
-      0.05 * side, 0.66, -0.16,
-      tip, 0.7, 0.06,
-      0.05 * side, 0.64, 0.3,
-      0.05 * side, 0.66, -0.16,
-      0.05 * side, 0.64, 0.3,
-      tip * 0.55, 0.68, 0.34,
-    ]);
-    w.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const sx = (v: number) => v * side;
+    const P = {
+      rootFront: [sx(0.075), 0.68, -0.14],
+      rootBack: [sx(0.075), 0.64, 0.24],
+      midFront: [sx(0.4), 0.7, -0.04],
+      midBack: [sx(0.38), 0.67, 0.32],
+      tip: [sx(0.84), 0.69, 0.3],
+    };
+    const tri = side > 0
+      ? [P.rootFront, P.midFront, P.midBack, P.rootFront, P.midBack, P.rootBack, P.midFront, P.tip, P.midBack]
+      : [P.midBack, P.midFront, P.rootFront, P.rootBack, P.midBack, P.rootFront, P.midBack, P.tip, P.midFront];
+    w.setAttribute('position', new THREE.Float32BufferAttribute(tri.flat(), 3));
     w.computeVertexNormals();
     tag(w, side);
   }
@@ -137,22 +158,33 @@ export class Egrets {
       side: THREE.DoubleSide,
       vertexShader: /* glsl */ `
         attribute float aWing;
-        attribute vec2 aFlap; // x : amplitude du battement, y : phase
+        attribute vec2 aFlap; // x : ouverture de l'aile (0 repliée, 1 en vol), y : phase
         uniform float uTime;
         varying vec3 vWorld;
         varying vec3 vNormal;
+
+        vec3 rotY(vec3 p, float a){ float c = cos(a), s = sin(a); return vec3(c * p.x + s * p.z, p.y, -s * p.x + c * p.z); }
+        vec3 rotZ(vec3 p, float a){ float c = cos(a), s = sin(a); return vec3(c * p.x - s * p.y, s * p.x + c * p.y, p.z); }
+
         void main(){
           vec3 p = position;
-          // battement lent et ample : une aigrette ne bat pas comme un moineau
-          float a = sin(uTime * 5.5 + aFlap.y) * 1.25 * aFlap.x - (1.0 - aFlap.x) * 0.15;
+          vec3 n = normal;
           if (aWing != 0.0) {
-            float span = abs(p.x) - 0.05;
-            p.y += sin(a) * span;
-            p.x = sign(p.x) * (0.05 + cos(a) * span);
+            vec3 shoulder = vec3(${SHOULDER[0].toFixed(3)} * aWing, ${SHOULDER[1].toFixed(2)}, ${SHOULDER[2].toFixed(2)});
+            vec3 q = p - shoulder;
+            // au repos l'aile est ramenée le long du flanc, pointe vers la queue
+            float fold = (1.0 - aFlap.x) * 1.22;
+            q = rotY(q, -aWing * fold);
+            q *= mix(0.86, 1.0, aFlap.x);
+            // en vol : battement lent et ample autour de l'axe du corps
+            float beat = sin(uTime * 5.0 + aFlap.y) * 1.15 * aFlap.x;
+            q = rotZ(q, aWing * beat);
+            n = rotZ(rotY(n, -aWing * fold), aWing * beat);
+            p = shoulder + q;
           }
           vec4 w = modelMatrix * instanceMatrix * vec4(p, 1.0);
           vWorld = w.xyz;
-          vNormal = normalize(mat3(instanceMatrix) * normal);
+          vNormal = normalize(mat3(instanceMatrix) * n);
           gl_Position = projectionMatrix * viewMatrix * w;
         }`,
       fragmentShader: /* glsl */ `
@@ -219,7 +251,7 @@ export class Egrets {
       this.dummy.position.copy(b.pos);
       this.dummy.rotation.set(b.state === 'envol' ? -0.12 : 0, b.heading, 0);
       const fade = b.state === 'envol' && b.timer > 12 ? Math.max(0, 1 - (b.timer - 12) / 3) : 1;
-      this.dummy.scale.setScalar(1.35 * fade);
+      this.dummy.scale.setScalar(1.15 * fade);
       this.dummy.updateMatrix();
       this.mesh.setMatrixAt(i, this.dummy.matrix);
       this.flapAttr.setXY(i, b.flap, b.phase);
