@@ -3,6 +3,7 @@ import { glslNoise, glslWorld, world } from './light';
 import { BIOMES, SEGMENTS, biomeWeights, buildFields, trailDistance } from './paths';
 import { CRASTE, crasteDistance, crasteProfile, deckHeight } from './craste';
 import { BASSIN, ESTEY_REACH, esteyDistance, esteyProfile } from './bassin';
+import { DELTA, DELTA_REACH, deltaDistance, deltaProfile } from './delta';
 
 export { BASSIN };
 
@@ -97,6 +98,20 @@ export function heightAt(x: number, z: number, dTrail = trailDistance(x, z)) {
     // près du large la vasière plonge sous l'eau, en bordure le schorre reste au sec
     const wet = 1 - THREE.MathUtils.smoothstep(db, BASSIN.radius * 0.8, BASSIN.radius * 1.15);
     h = THREE.MathUtils.lerp(h, THREE.MathUtils.lerp(schorre, slikke, wet), tide);
+  }
+
+  // Le delta est une plaine d'inondation : le sol s'y aplanit juste au-dessus de l'eau. Sans ce
+  // calage, le bruit du terrain descendait deux mètres sous la rivière, qui semblait perchée.
+  if (delta > 0.01) {
+    const flood = DELTA.level + 0.85 + (fbm(x * 0.07 + 21, z * 0.07) - 0.5) * 0.9;
+    h = THREE.MathUtils.lerp(h, flood, Math.min(delta * 1.15, 1));
+  }
+
+  // les bras du delta : mêmes lits dessinés à part, le terrain leur fait de la place
+  const dd = deltaDistance(x, z);
+  if (dd < DELTA_REACH) {
+    const off = 0.5 * (1 - THREE.MathUtils.smoothstep(dd, DELTA_REACH * 0.7, DELTA_REACH));
+    h = Math.min(h, deltaProfile(dd, h) - off);
   }
 
   // l'estey : même principe que la craste, le lit est dessiné à part

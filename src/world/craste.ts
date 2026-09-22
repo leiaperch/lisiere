@@ -21,7 +21,9 @@ const dir2 = new THREE.Vector2(
 ).normalize();
 
 export const CRASTE = {
-  a: new THREE.Vector2(crossPoint.x - dir2.x * 52, crossPoint.z - dir2.y * 52),
+  // Le fossé s'arrête court de ce côté : allongé, il atteignait le sentier de l'océan et l'on
+  // tombait dedans juste avant la montée de la dune.
+  a: new THREE.Vector2(crossPoint.x - dir2.x * 24, crossPoint.z - dir2.y * 24),
   b: new THREE.Vector2(crossPoint.x + dir2.x * 44, crossPoint.z + dir2.y * 44),
   /** demi-largeur du fond, en mètres */
   half: 2.2,

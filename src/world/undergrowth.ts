@@ -217,15 +217,15 @@ function build(parts: THREE.BufferGeometry[]) {
 // ───────────── semis ─────────────
 
 const RULES: Record<Kind, { count: number; near: [number, number]; forest: number; scale: [number, number]; clearing: boolean; biomes: BiomeId[] }> = {
-  fern: { count: 820, near: [1.6, 30], forest: 0.5, scale: [0.7, 1.5], clearing: false, biomes: ['foret', 'marais'] },
+  fern: { count: 820, near: [1.6, 30], forest: 0.5, scale: [0.7, 1.5], clearing: false, biomes: ['foret', 'marais', 'delta'] },
   bush: { count: 380, near: [2.2, 34], forest: 0.35, scale: [0.8, 1.7], clearing: true, biomes: ['foret'] },
-  stump: { count: 110, near: [3.2, 26], forest: 0.45, scale: [0.7, 1.3], clearing: true, biomes: ['foret', 'marais'] },
-  log: { count: 90, near: [3, 28], forest: 0.45, scale: [0.7, 1.2], clearing: false, biomes: ['foret', 'marais'] },
+  stump: { count: 110, near: [3.2, 26], forest: 0.45, scale: [0.7, 1.3], clearing: true, biomes: ['foret', 'marais', 'delta'] },
+  log: { count: 90, near: [3, 28], forest: 0.45, scale: [0.7, 1.2], clearing: false, biomes: ['foret', 'marais', 'delta'] },
   rock: { count: 300, near: [2.2, 32], forest: 0, scale: [0.5, 1.6], clearing: true, biomes: ['foret'] },
-  reed: { count: 700, near: [1.1, 22], forest: 0, scale: [0.7, 1.6], clearing: true, biomes: ['marais'] },
+  reed: { count: 900, near: [1.1, 24], forest: 0, scale: [0.7, 1.6], clearing: true, biomes: ['marais', 'delta'] },
   oyat: { count: 1500, near: [1.0, 42], forest: 0, scale: [0.7, 1.6], clearing: true, biomes: ['dune'] },
   salicorne: { count: 1400, near: [1.0, 34], forest: 0, scale: [0.45, 0.9], clearing: true, biomes: ['bassin'] },
-  molinie: { count: 1400, near: [1.0, 40], forest: 0, scale: [0.8, 1.7], clearing: true, biomes: ['marais'] },
+  molinie: { count: 1400, near: [1.0, 40], forest: 0, scale: [0.8, 1.7], clearing: true, biomes: ['marais', 'delta'] },
   linaigrette: { count: 900, near: [1.2, 30], forest: 0, scale: [0.8, 1.2], clearing: true, biomes: ['marais'] },
 };
 

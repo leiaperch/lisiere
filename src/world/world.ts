@@ -13,6 +13,7 @@ import { createVineyard } from './vines';
 import { SunShadow, type Caster } from './shadow';
 import { createCrasteBanks, createCrasteWater, createDeck } from './craste';
 import { createBasinWater, createCabane, createEstey, createEsteyWater, createPignots } from './bassin';
+import { createAlders, createDeltaBanks, createDeltaWater } from './delta';
 import { Post } from './post';
 import { Walk } from './walk';
 
@@ -27,7 +28,7 @@ export class World {
   readonly camera = new THREE.PerspectiveCamera(52, 1, 0.1, 900);
   readonly walk: Walk;
   readonly post: Post;
-  readonly stats = { frames: 0, triangles: 0, calls: 0, trees: 0, blades: 0, undergrowth: 0, vines: 0 };
+  readonly stats = { frames: 0, triangles: 0, calls: 0, trees: 0, blades: 0, undergrowth: 0, vines: 0, alders: 0 };
   private fireflies!: THREE.Points;
   private lake!: Lake;
   private birds!: Birds;
@@ -38,6 +39,7 @@ export class World {
   private terrainMat!: THREE.ShaderMaterial;
   private ocean!: THREE.Mesh;
   private basin!: THREE.Group;
+  private delta!: THREE.Group;
   private bog!: THREE.Mesh;
   private craste!: THREE.Mesh;
   private banks!: THREE.Mesh;
@@ -150,6 +152,12 @@ export class World {
     this.basin = new THREE.Group();
     this.basin.add(createBasinWater(), createEstey((x, z) => heightAt(x, z)), createEsteyWater(), createPignots(), createCabane());
     this.scene.add(this.basin);
+
+    const alders = createAlders((x, z) => heightAt(x, z));
+    this.stats.alders = alders.count;
+    this.delta = new THREE.Group();
+    this.delta.add(createDeltaBanks((x, z) => heightAt(x, z)), createDeltaWater(), alders.mesh);
+    this.scene.add(this.delta);
 
     progress(0.82, 'Oiseaux, aigrettes et pissenlits');
     await step();
@@ -291,6 +299,8 @@ export class World {
     this.ocean.visible = coast && t > 0.6;
     // le bassin n'apparaît qu'une fois la dune franchie : avant, il est derrière l'horizon
     this.basin.visible = coast && t > 0.78;
+    // le delta n'apparaît qu'après l'étang, quand le sentier remonte la rivière
+    this.delta.visible = marsh && t > 0.78;
 
     // flou de respiration : monte vite, redescend lentement
     this.blurTween = Math.max(0, this.blurTween - dt * 1.4);
