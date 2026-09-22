@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { heightAt, trailPoint } from './terrain';
+import { heightAt, pathPoint } from './terrain';
 import { glslNoise, glslWorld, world } from './light';
 
 // Oiseaux posés au bord du sentier. Ils picorent ; quand le promeneur approche ou que le curseur
@@ -63,8 +63,8 @@ export class Birds {
     for (let i = 0; i < COUNT; i++) {
       // petits groupes posés dans la prairie et au début du sous-bois
       const group = Math.floor(i / 5);
-      const u = 0.035 + group * 0.055 + Math.random() * 0.02;
-      trailPoint(u, p);
+      const u = 0.14 + group * 0.2 + Math.random() * 0.07;
+      pathPoint('approche', u, p);
       const side = (group % 2 ? 1 : -1) * (2.2 + Math.random() * 3.5);
       const x = p.x + side;
       const z = p.z + (Math.random() - 0.5) * 3;

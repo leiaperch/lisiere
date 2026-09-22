@@ -3,23 +3,31 @@ import gsap from 'gsap';
 import * as THREE from 'three';
 import { World } from './world/world';
 import { state } from './world/light';
-import { TRAIL, heightAt, trailPoint } from './world/terrain';
+import { routeProfile } from './world/terrain';
+import { START, TOTAL_LENGTH } from './world/paths';
 import { Ambience } from './sound';
 
 const $ = <T extends HTMLElement>(s: string) => document.querySelector<T>(s)!;
 const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-// ───────── profil du sentier, commun au chargement et à la carte ─────────
+// ───────── profil du sentier, commun au chargement et à la vignette ─────────
+// Avant la fourche, on ne connaît pas encore la fin du parcours : le profil montre le tronc
+// commun prolongé par la branche du littoral, et il est redessiné dès qu'un chemin est pris.
 const SAMPLES = 90;
-const profile = Array.from({ length: SAMPLES }, (_, i) => {
-  const p = trailPoint(i / (SAMPLES - 1));
-  return heightAt(p.x, p.z, 0);
-});
-const hMin = Math.min(...profile);
-const hMax = Math.max(...profile);
 const METERS_PER_UNIT = 8;
-const trailKm = (TRAIL.getLength() * METERS_PER_UNIT) / 1000;
+let route = [START, 'cote'];
+let profile = routeProfile(route, SAMPLES);
+let hMin = Math.min(...profile);
+let hMax = Math.max(...profile);
+const trailKm = (TOTAL_LENGTH * METERS_PER_UNIT) / 1000;
 const altitude = (h: number) => Math.round(318 + h * 6);
+
+function setRoute(branch: string) {
+  route = [START, branch];
+  profile = routeProfile(route, SAMPLES);
+  hMin = Math.min(...profile);
+  hMax = Math.max(...profile);
+}
 
 function profilePath(w: number, h: number, pad: number, flat = false) {
   return profile
@@ -77,11 +85,12 @@ async function boot() {
 // l'objectif, la note du carnet et l'annonce pour les lecteurs d'écran.
 const STEPS = [
   { to: 0.19, name: 'Lisière' },
-  { to: 0.39, name: 'Sous-bois' },
-  { to: 0.6, name: 'La clairière' },
-  { to: 0.84, name: 'Heure bleue' },
-  { to: 1.01, name: 'Le lac' },
+  { to: 0.38, name: 'Sous-bois' },
+  { to: 0.5, name: 'La clairière' },
+  { to: 0.56, name: 'La fourche' },
+  { to: 1.01, name: 'La suite' },
 ];
+const ENDINGS: Record<string, string> = { cote: 'La dune et l’océan', marais: 'Le marais et l’étang' };
 
 function setupWalk(world: World) {
   const walkSection = $('#walk');
@@ -92,7 +101,8 @@ function setupWalk(world: World) {
     if (i === active) return;
     const first = active < 0;
     active = i;
-    live.textContent = `Étape ${i + 1} sur 5, ${STEPS[i].name}`;
+    const name = i === STEPS.length - 1 ? (ENDINGS[route[1]] ?? STEPS[i].name) : STEPS[i].name;
+    live.textContent = `Étape ${i + 1} sur ${STEPS.length}, ${name}`;
     if (!first && !reduced) world.breathe();
   };
 
@@ -109,10 +119,17 @@ function setupWalk(world: World) {
   const line = $('#profile-line');
   const done = $<SVGPathElement & HTMLElement>('#profile-done');
   const dot = $('#profile-dot');
-  line.setAttribute('d', profilePath(300, 60, 8));
-  done.setAttribute('d', profilePath(300, 60, 8));
+  const drawProfile = () => {
+    line.setAttribute('d', profilePath(300, 60, 8));
+    done.setAttribute('d', profilePath(300, 60, 8));
+  };
+  drawProfile();
   const doneLen = done.getTotalLength();
   done.style.strokeDasharray = `${doneLen}`;
+  world.onChoose = (branch) => {
+    setRoute(branch);
+    drawProfile();
+  };
   const km = $('#profile-km');
   const alt = $('#profile-alt');
   const clock = $('#clock');
@@ -122,6 +139,9 @@ function setupWalk(world: World) {
   const shade = new THREE.Color();
   const white = new THREE.Color('#ffffff');
   let frame = 0;
+
+  const forkHint = $('#fork-hint');
+  world.onStuck = (stuck) => forkHint.classList.toggle('gone', !stuck);
 
   world.onFrame = (t) => {
     const i = STEPS.findIndex((s) => t < s.to);
@@ -171,7 +191,7 @@ function setupCursor() {
 }
 
 // ───────── son et rencontres ─────────
-const HOVER_LABELS = { bird: 'ils vont partir', flower: 'souffler', water: 'ricochet' } as const;
+const HOVER_LABELS = { bird: 'ils vont partir', flower: 'souffler', water: 'ricochet', path: 'par ici' } as const;
 
 function setupSound(world: World) {
   const amb = new Ambience();
@@ -192,6 +212,11 @@ function setupSound(world: World) {
   world.onHover = (what) => {
     cursor.classList.toggle('acts', !!what);
     if (what) label.textContent = HOVER_LABELS[what];
+  };
+  const chosen = world.onChoose;
+  world.onChoose = (branch) => {
+    chosen?.(branch);
+    amb.setBranch(branch);
   };
   world.onBirds = () => amb.flutter();
   world.onBlow = () => amb.puff();

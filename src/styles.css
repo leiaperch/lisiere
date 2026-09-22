@@ -72,6 +72,9 @@ button { font: inherit; color: inherit; }
 .hint::after { content: ''; display: block; width: 1px; height: 28px; margin: 10px auto 0; background: linear-gradient(var(--ink-soft), transparent); animation: drip 2s var(--ease) infinite; transform-origin: top; }
 @keyframes drip { 0% { transform: scaleY(0); } 60% { transform: scaleY(1); opacity: 1; } 100% { transform: scaleY(1); opacity: 0; } }
 .hint.gone { opacity: 0; }
+/* à la fourche : le même filet que l'indice de départ, sans la goutte qui invite à défiler */
+.hint.fork { bottom: 52px; }
+.hint.fork::after { display: none; }
 
 /* ───────── Curseur-lanterne ───────── */
 .cursor { position: fixed; z-index: 60; left: 0; top: 0; pointer-events: none; }
@@ -110,6 +113,9 @@ button { font: inherit; color: inherit; }
   .about-grid { grid-template-columns: 1fr; }
   .profile { width: 44vw; }
   .hint { display: none; }
+  /* l'indice de départ peut disparaître, pas l'avertissement de la fourche : sans lui, on ne
+     comprend pas pourquoi le défilement ne fait plus avancer */
+  .hint.fork { display: block; bottom: 96px; font-size: 12px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .stage.open { transition: none; }

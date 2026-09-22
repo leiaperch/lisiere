@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { CLEARING, LAKE, heightAt, trailDistance } from './terrain';
+import { CLEARING, LAKE, MARSH, coastMask, heightAt } from './terrain';
+import { biomeAt, trailDistance } from './paths';
 import { glslNoise, glslWorld, world } from './light';
 
 // Herbes hautes le long du sentier et dans la clairière : un brin = 5 sommets, des dizaines de
@@ -25,9 +26,9 @@ export function createGrass(count: number) {
   const offsets = new Float32Array(count * 4); // x, y, z, hauteur
   const params = new Float32Array(count * 3); // rotation, teinte, phase
   let n = 0;
-  for (let i = 0; n < count && i < count * 8; i++) {
-    // on sème près du sentier (où passe la caméra) et dans la clairière
-    const inClearing = rand() < 0.3;
+  for (let i = 0; n < count && i < count * 10; i++) {
+    // on sème près des sentiers (où passe la caméra) et dans la clairière
+    const inClearing = rand() < 0.22;
     let x: number;
     let z: number;
     if (inClearing) {
@@ -36,13 +37,20 @@ export function createGrass(count: number) {
       x = CLEARING.x + Math.cos(a) * r;
       z = CLEARING.z + Math.sin(a) * r;
     } else {
-      x = (rand() - 0.5) * 70;
-      z = 34 - rand() * 250;
+      x = (rand() - 0.5) * 220;
+      z = 40 - rand() * 280;
     }
     const d = trailDistance(x, z);
     if (d < 1.4 || d > 26) continue;
     if (Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.radius * 1.02) continue;
-    const tall = 0.35 + rand() * 0.45 + THREE.MathUtils.smoothstep(d, 2, 8) * 0.35;
+    if (Math.hypot(x - MARSH.x, z - MARSH.z) < MARSH.radius * 0.95) continue;
+    // l'herbe est haute en forêt, clairsemée au marais, absente du sable
+    if (coastMask(x, z) > 0.3) continue;
+    const biome = biomeAt(x, z);
+    if (biome === 'marais' && rand() > 0.45) continue;
+    if (biome === 'dune' && rand() > 0.5) continue;
+    const short = biome === 'dune' ? 0.7 : biome === 'marais' ? 0.85 : 1;
+    const tall = (0.35 + rand() * 0.45 + THREE.MathUtils.smoothstep(d, 2, 8) * 0.35) * short;
     offsets.set([x, heightAt(x, z, d), z, tall], n * 4);
     params.set([rand() * Math.PI, rand(), rand()], n * 3);
     n++;
