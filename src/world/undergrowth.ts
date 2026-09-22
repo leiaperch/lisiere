@@ -224,7 +224,7 @@ const RULES: Record<Kind, { count: number; near: [number, number]; forest: numbe
   rock: { count: 300, near: [2.2, 32], forest: 0, scale: [0.5, 1.6], clearing: true, biomes: ['foret'] },
   reed: { count: 700, near: [1.1, 22], forest: 0, scale: [0.7, 1.6], clearing: true, biomes: ['marais'] },
   oyat: { count: 1500, near: [1.0, 42], forest: 0, scale: [0.7, 1.6], clearing: true, biomes: ['dune'] },
-  salicorne: { count: 1100, near: [1.0, 34], forest: 0, scale: [0.7, 1.5], clearing: true, biomes: ['bassin'] },
+  salicorne: { count: 1400, near: [1.0, 34], forest: 0, scale: [0.45, 0.9], clearing: true, biomes: ['bassin'] },
   molinie: { count: 1400, near: [1.0, 40], forest: 0, scale: [0.8, 1.7], clearing: true, biomes: ['marais'] },
   linaigrette: { count: 900, near: [1.2, 30], forest: 0, scale: [0.8, 1.2], clearing: true, biomes: ['marais'] },
 };

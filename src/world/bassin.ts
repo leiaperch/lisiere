@@ -15,13 +15,14 @@ export const BASSIN = { x: 165, z: -315, radius: 105, level: -2.5 };
 // ───────────── l'estey ─────────────
 
 export const ESTEY_CURVE = new THREE.CatmullRomCurve3(
+  // Le lit longe le sentier sans jamais s'en approcher à moins d'une dizaine de mètres : au plus
+  // près, il passait sous le chemin et l'on marchait dans l'eau.
   ([
-    [6, -208],
-    [24, -222],
-    [40, -230],
-    [54, -241],
-    [70, -251],
-    [88, -264],
+    [18, -230],
+    [34, -240],
+    [50, -250],
+    [66, -261],
+    [84, -273],
   ] as [number, number][]).map(([x, z]) => new THREE.Vector3(x, 0, z)),
   false,
   'catmullrom',
