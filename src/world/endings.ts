@@ -101,33 +101,53 @@ function built(parts: THREE.BufferGeometry[], name: string, tone: number) {
 function windows(rects: [number, number, number, number, number, number][]) {
   const parts = rects.map(([w, h, x, y, z, ry]) => {
     const g = new THREE.PlaneGeometry(w, h);
-    g.rotateY(ry);
-    g.translate(x, y, z);
-    return g.toNonIndexed();
+    const flat = g.toNonIndexed();
+    flat.deleteAttribute('uv');
+    // coordonnées locales normalisées : servent à adoucir le bord de la vitre
+    const p = flat.attributes.position as THREE.BufferAttribute;
+    const uv = new Float32Array(p.count * 2);
+    for (let i = 0; i < p.count; i++) {
+      uv[i * 2] = p.getX(i) / (w / 2);
+      uv[i * 2 + 1] = p.getY(i) / (h / 2);
+    }
+    flat.setAttribute('aUv', new THREE.BufferAttribute(uv, 2));
+    flat.rotateY(ry);
+    flat.translate(x, y, z);
+    return flat;
   });
   const geo = mergeGeometries(parts)!;
-  geo.deleteAttribute('uv');
   const mat = new THREE.ShaderMaterial({
     uniforms: { ...world },
     side: THREE.DoubleSide,
     transparent: true,
     depthWrite: false,
+    blending: THREE.AdditiveBlending,
     vertexShader: /* glsl */ `
+      attribute vec2 aUv;
       varying vec3 vWorld;
+      varying vec2 vUv;
       void main(){
         vec4 w = modelMatrix * vec4(position, 1.0);
         vWorld = w.xyz;
+        vUv = aUv;
         gl_Position = projectionMatrix * viewMatrix * w;
       }`,
     fragmentShader: /* glsl */ `
       ${glslNoise}
       ${glslWorld}
       varying vec3 vWorld;
+      varying vec2 vUv;
       void main(){
         // la lampe intérieure monte avec la lune : de jour la fenêtre est sombre
-        float lit = 0.12 + 0.88 * uMoon;
-        vec3 col = vec3(1.0, 0.72, 0.38) * lit;
-        gl_FragColor = vec4(applyFog(col, vWorld, cameraPosition), 0.25 + 0.6 * lit);
+        float lit = 0.1 + 0.9 * uMoon;
+        // le carreau n'est pas un aplat : il s'éteint vers les bords, comme une vitre vue de loin
+        float edge = (1.0 - smoothstep(0.55, 1.0, abs(vUv.x))) * (1.0 - smoothstep(0.55, 1.0, abs(vUv.y)));
+        float glow = edge * edge;
+        vec3 col = vec3(1.0, 0.68, 0.34) * lit * (0.35 + 0.9 * glow);
+        // le halo s'atténue avec la distance comme le reste du paysage
+        float d = length(vWorld - cameraPosition);
+        col *= exp(-uFogDensity * d * 0.5);
+        gl_FragColor = vec4(col, 1.0);
       }`,
   });
   const mesh = new THREE.Mesh(geo, mat);
@@ -282,12 +302,12 @@ export function createVillage(groundAt: (x: number, z: number) => number, waterL
   // Reculées d'une dizaine de mètres et rapetissées : une cabane ostréicole est une pièce unique,
   // pas une grange. À cinq mètres du chemin et sept mètres de haut, elles écrasaient tout.
   const cabins: [number, number, number, number][] = [
-    [93, -231, 0.3, 0.85],
-    [107, -233, 0.26, 0.78],
-    [120, -236, 0.34, 0.92],
-    [133, -241, 0.24, 0.8],
-    [145, -245, 0.38, 0.88],
-    [156, -250, 0.3, 0.75],
+    [70, -232, 0.55, 0.85],
+    [78, -224, 0.5, 0.78],
+    [87, -216, 0.45, 0.92],
+    [96, -209, 0.42, 0.8],
+    [105, -203, 0.38, 0.88],
+    [114, -198, 0.35, 0.75],
   ];
   for (const [x, z, ry, scale] of cabins) {
     const w = 5.2 * scale;
@@ -322,15 +342,16 @@ export function createVillage(groundAt: (x: number, z: number) => number, waterL
   }
   const jetty = built(deck, 'ponton', 0.1);
   // le ponton part droit devant le promeneur qui arrive, et s'avance sur l'eau
-  jetty.position.set(153, waterLevel + 1.2, -263);
-  jetty.rotation.y = -1.15;
+  // le ponton part de la rive vers le large, et le promeneur s'arrête à sa racine
+  jetty.position.set(111, waterLevel + 1.0, -216);
+  jetty.rotation.y = -0.51;
   group.add(jetty);
 
   // pinasses échouées : coque effilée, fond plat
   for (const [x, z, ry] of [
-    [104, -250, 0.8],
-    [126, -256, -0.3],
-    [142, -264, 1.4],
+    [86, -234, 0.8],
+    [98, -226, -0.3],
+    [110, -220, 1.4],
   ] as [number, number, number][]) {
     const hull = new THREE.CylinderGeometry(0.85, 0.55, 6.4, 6, 1);
     hull.rotateZ(Math.PI / 2);

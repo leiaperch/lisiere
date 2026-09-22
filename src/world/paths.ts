@@ -94,28 +94,21 @@ const TO_DELTA: [number, number][] = [
 ];
 
 // et débouche sur l'airial : la clairière habitée, sous les chênes
-// On s'arrête à une quinzaine de mètres de la maison, face à elle : arriver dessus, puis la
-// dépasser, ne laissait rien à regarder.
+// On s'arrête au bord de la clairière, à une quarantaine de mètres de la maison. De près, un
+// bâtiment fait de boîtes se lit comme une maquette ; de loin, c'est une silhouette et une lampe.
 const TO_AIRIAL: [number, number][] = [
   [146, -156],
-  [158, -152],
-  [170, -148],
-  [178, -144],
-  [184, -140],
-  [186, -142],
-  [186, -136],
+  [157, -157],
+  [168, -158],
+  [177, -157],
+  [183, -155],
+  [186, -152],
+  [186, -148],
 ];
 
 // côté bassin, le sentier longe la rive jusqu'au village ostréicole
-const TO_VILLAGE: [number, number][] = [
-  [78, -239],
-  [94, -243],
-  [110, -246],
-  [124, -250],
-  [136, -255],
-  [147, -260],
-];
-
+// Le sentier longe le village sans y entrer et s'arrête à la racine du ponton : la dernière
+// image est l'eau, les pignots et la cabane tchanquée, pas une rangée de cabanes.
 function segment(id: string, biome: BiomeId, pts: [number, number][], next: string[] = []): Segment {
   const c = curve(pts);
   return { id, biome, curve: c, length: c.getLength(), next };
@@ -125,8 +118,10 @@ export const SEGMENTS: Record<string, Segment> = {
   vigne: segment('vigne', 'vigne', VINES, ['approche']),
   approche: segment('approche', 'foret', APPROACH, ['cote', 'marais']),
   cote: segment('cote', 'dune', TO_COAST, ['bassin']),
-  bassin: segment('bassin', 'bassin', TO_BASIN, ['village']),
-  village: segment('village', 'bassin', TO_VILLAGE),
+  // Pas de tronçon de village : la branche s'arrête sur la rive, face aux pignots et à la cabane
+  // tchanquée. Aller jusqu'aux cabanes obligeait à traverser la vasière et un bras du delta, et
+  // l'image d'arrivée y perdait — le bâti n'est bon qu'en silhouette, à distance.
+  bassin: segment('bassin', 'bassin', TO_BASIN),
   marais: segment('marais', 'marais', TO_MARSH, ['delta']),
   delta: segment('delta', 'delta', TO_DELTA, ['airial']),
   airial: segment('airial', 'foret', TO_AIRIAL),

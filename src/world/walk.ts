@@ -41,7 +41,7 @@ const GAZE: Record<string, Gaze[]> = {
     { at: 0.0, yaw: -0.3, pitch: 0.0, eye: 1.75 }, // on quitte l'océan, dos au couchant
     { at: 0.35, yaw: 0.25, pitch: -0.08, eye: 1.7 },
     { at: 0.7, yaw: -0.15, pitch: 0.02, eye: 1.7 },
-    { at: 1.0, yaw: 0.12, pitch: 0.04, eye: 2.2 }, // la lagune s'ouvre, la cabane au loin
+    { at: 1.0, yaw: 0.28, pitch: 0.03, eye: 2.2 }, // la lagune, les pignots, la cabane tchanquée
   ],
   delta: [
     { at: 0.0, yaw: 0.1, pitch: 0.0, eye: 1.65 },
@@ -53,11 +53,6 @@ const GAZE: Record<string, Gaze[]> = {
     { at: 0.0, yaw: 0.15, pitch: 0.02, eye: 1.65 },
     { at: 0.5, yaw: -0.2, pitch: 0.06, eye: 1.7 }, // les chênes de l'airial s'ouvrent
     { at: 1.0, yaw: 0.0, pitch: 0.03, eye: 1.7 }, // la maison, la lampe allumée
-  ],
-  village: [
-    { at: 0.0, yaw: -0.2, pitch: 0.0, eye: 1.7 },
-    { at: 0.45, yaw: 0.28, pitch: -0.02, eye: 1.7 }, // la rangée de cabanes, à main gauche
-    { at: 1.0, yaw: -0.12, pitch: 0.02, eye: 1.75 }, // le ponton qui part vers le large
   ],
   marais: [
     { at: 0.0, yaw: -0.05, pitch: 0.0, eye: 1.65 },
