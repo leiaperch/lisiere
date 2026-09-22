@@ -24,8 +24,8 @@ export interface LightKey {
 }
 
 export const KEYS: LightKey[] = [
-  { t: 0.0, clock: 19 * 60 + 40, sunElevation: 9, sunAzimuth: -28, sun: '#ffc27a', sunPower: 3.2, skyTop: '#4f7fb8', skyHorizon: '#ffcf8a', fog: '#b98458', fogDensity: 0.0055, ambient: 0.55, exposure: 1.0, grade: '#3a2a1a', fireflies: 0, lantern: 0, moon: 0, temperature: 21 },
-  { t: 0.24, clock: 19 * 60 + 58, sunElevation: 5, sunAzimuth: -22, sun: '#ffab5c', sunPower: 3.4, skyTop: '#44699f', skyHorizon: '#ffb070', fog: '#9c6c4a', fogDensity: 0.009, ambient: 0.45, exposure: 1.02, grade: '#2e2418', fireflies: 0, lantern: 0, moon: 0, temperature: 19 },
+  { t: 0.0, clock: 19 * 60 + 40, sunElevation: 11, sunAzimuth: -28, sun: '#ffc27a', sunPower: 3.2, skyTop: '#4f7fb8', skyHorizon: '#ffcf8a', fog: '#b98458', fogDensity: 0.0042, ambient: 0.55, exposure: 1.0, grade: '#3a2a1a', fireflies: 0, lantern: 0, moon: 0, temperature: 21 },
+  { t: 0.24, clock: 19 * 60 + 58, sunElevation: 5, sunAzimuth: -22, sun: '#ffab5c', sunPower: 3.4, skyTop: '#44699f', skyHorizon: '#ffb070', fog: '#9c6c4a', fogDensity: 0.0075, ambient: 0.45, exposure: 1.02, grade: '#2e2418', fireflies: 0, lantern: 0, moon: 0, temperature: 19 },
   { t: 0.48, clock: 20 * 60 + 20, sunElevation: 1.2, sunAzimuth: -14, sun: '#ff8a5a', sunPower: 2.4, skyTop: '#394b80', skyHorizon: '#f08c72', fog: '#7c5a66', fogDensity: 0.01, ambient: 0.38, exposure: 1.05, grade: '#2a2030', fireflies: 0.1, lantern: 0, moon: 0.1, temperature: 17 },
   { t: 0.72, clock: 20 * 60 + 45, sunElevation: -4, sunAzimuth: -8, sun: '#8a8fd6', sunPower: 0.5, skyTop: '#16204a', skyHorizon: '#50609a', fog: '#2c3560', fogDensity: 0.012, ambient: 0.3, exposure: 1.1, grade: '#141a33', fireflies: 1, lantern: 0.7, moon: 0.5, temperature: 15 },
   { t: 1.0, clock: 21 * 60 + 10, sunElevation: -10, sunAzimuth: 0, sun: '#6b78c9', sunPower: 0.15, skyTop: '#060a1a', skyHorizon: '#18214a', fog: '#121a36', fogDensity: 0.01, ambient: 0.22, exposure: 1.18, grade: '#0a0f24', fireflies: 0.8, lantern: 1, moon: 1, temperature: 13 },
@@ -48,6 +48,10 @@ export const world = {
   uShadowMap: { value: null as THREE.Texture | null },
   uShadowBounds: { value: new THREE.Vector4(-160, -260, 320, 320) }, // x, z, largeur, profondeur
   uShadowStrength: { value: 1 },
+  // ombres portées calculées en direct depuis le soleil (voir shadow.ts)
+  uShadowMapSun: { value: null as THREE.Texture | null },
+  uSunMatrix: { value: new THREE.Matrix4() },
+  uSunShadowStrength: { value: 0 },
 };
 
 export interface LightState {
@@ -145,6 +149,9 @@ uniform float uWind;
 uniform sampler2D uShadowMap;
 uniform vec4 uShadowBounds;
 uniform float uShadowStrength;
+uniform sampler2D uShadowMapSun;
+uniform mat4 uSunMatrix;
+uniform float uSunShadowStrength;
 
 // Ciel : dégradé vertical, halo du soleil, lueur de lune
 vec3 skyColor(vec3 dir){
@@ -175,6 +182,30 @@ float groundShadow(vec3 worldPos){
   if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) return 1.0;
   float s = texture2D(uShadowMap, uv).r;
   return mix(1.0, s, uShadowStrength);
+}
+
+// Ombre portée du soleil : profondeur vue depuis le soleil, comparée à celle du point éclairé.
+// Hors de la zone couverte (quelques dizaines de mètres), on retombe sur les ombres peintes.
+float sunShadow(vec3 worldPos, float ndl){
+  float painted = groundShadow(worldPos);
+  if (uSunShadowStrength <= 0.001) return painted;
+  vec4 proj = uSunMatrix * vec4(worldPos, 1.0);
+  vec3 uvz = proj.xyz / proj.w * 0.5 + 0.5;
+  if (uvz.x < 0.001 || uvz.y < 0.001 || uvz.x > 0.999 || uvz.y > 0.999 || uvz.z > 1.0) return painted;
+  float bias = 0.0006 + 0.0022 * (1.0 - clamp(ndl, 0.0, 1.0));
+  float texel = 1.0 / 2048.0;
+  float lit = 0.0;
+  for (int i = 0; i < 4; i++) {
+    vec2 o = vec2(i == 0 || i == 3 ? 1.0 : -1.0, i < 2 ? 1.0 : -1.0) * texel * 1.3;
+    float d = texture2D(uShadowMapSun, uvz.xy + o).r;
+    lit += uvz.z - bias > d ? 0.0 : 1.0;
+  }
+  lit *= 0.25;
+  // fondu sur les bords de la zone couverte, pour que la limite ne se voie pas
+  vec2 edge = smoothstep(vec2(0.0), vec2(0.08), uvz.xy) * smoothstep(vec2(1.0), vec2(0.92), uvz.xy);
+  float inside = edge.x * edge.y * uSunShadowStrength;
+  // dans la zone couverte, l'ombre calculée remplace l'ombre peinte (sinon elles s'additionnent)
+  return mix(painted, lit, inside);
 }
 
 // Lanterne du promeneur : lumière chaude à courte portée qui suit le curseur

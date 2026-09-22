@@ -139,10 +139,11 @@ export function createTerrain() {
         albedo = mix(albedo, dirt, path);
         albedo *= 0.85 + grain * 0.3;
 
-        float shadow = groundShadow(vWorld);
         float ndl = max(dot(n, uSunDir), 0.0);
+        float shadow = sunShadow(vWorld, ndl);
         vec3 direct = uSunColor * ndl * shadow * (1.0 - forest * 0.75);
-        vec3 ambient = mix(uSkyHorizon, uSkyTop, 0.5) * uAmbient * (1.0 - forest * 0.55);
+        // à l'ombre, il ne reste que la lumière du ciel, un peu plus froide
+        vec3 ambient = mix(uSkyHorizon, uSkyTop, 0.5) * uAmbient * (1.0 - forest * 0.55) * (0.72 + 0.28 * shadow);
         vec3 col = albedo * (direct + ambient + lantern(vWorld, n));
         col = applyFog(col, vWorld, cameraPosition);
         gl_FragColor = vec4(col, 1.0);

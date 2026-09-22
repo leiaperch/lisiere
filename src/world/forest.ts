@@ -186,7 +186,8 @@ const fragment = /* glsl */ `
     // contre-jour : la lumière traverse les aiguilles et les feuilles vues face au soleil
     float back = pow(max(dot(-v, L), 0.0), 5.0) * vPart;
     float edge = pow(1.0 - max(dot(n, v), 0.0), 2.0);
-    vec3 sun = uSunColor * (wrap * ao + back * (0.6 + edge * 1.6) * vec3(1.0, 0.85, 0.45) * 0.9);
+    float shadow = sunShadow(vWorld, dot(n, L));
+    vec3 sun = uSunColor * (wrap * ao * mix(0.45, 1.0, shadow) + back * (0.6 + edge * 1.6) * vec3(1.0, 0.85, 0.45) * 0.9 * shadow);
     vec3 amb = mix(uSkyHorizon, uSkyTop, n.y * 0.5 + 0.5) * uAmbient * ao;
     vec3 rim = uSkyHorizon * edge * 0.25 * vPart;
     vec3 col = albedo * (sun + amb + lantern(vWorld, n)) + rim * albedo * 2.0;

@@ -6,6 +6,8 @@ import { createGrass } from './grass';
 import { createFireflies, createLake, createSky, type Lake } from './sky';
 import { Birds } from './fauna';
 import { Dandelions } from './flora';
+import { createUndergrowth } from './undergrowth';
+import { SunShadow, type Caster } from './shadow';
 import { Post } from './post';
 import { Walk } from './walk';
 
@@ -20,12 +22,13 @@ export class World {
   readonly camera = new THREE.PerspectiveCamera(52, 1, 0.1, 900);
   readonly walk: Walk;
   readonly post: Post;
-  readonly stats = { frames: 0, triangles: 0, calls: 0, trees: 0, blades: 0 };
+  readonly stats = { frames: 0, triangles: 0, calls: 0, trees: 0, blades: 0, undergrowth: 0 };
   private fireflies!: THREE.Points;
   private lake!: Lake;
   private birds!: Birds;
   private dandelions!: Dandelions;
   private pointerRay: THREE.Ray | null = null;
+  private shadow!: SunShadow;
   /** ce que le curseur survole : sert à changer le curseur de la page */
   hover: 'bird' | 'flower' | 'water' | null = null;
   onHover?: (what: 'bird' | 'flower' | 'water' | null) => void;
@@ -68,15 +71,22 @@ export class World {
     await step();
     const trees = plantForest();
     this.stats.trees = trees.length;
-    this.scene.add(createForest(trees));
-    // ombres peintes pour le soleil de 19 h 50, quand elles sont les plus longues
+    const forestGroup = createForest(trees);
+    this.scene.add(forestGroup);
+    // ombres peintes au loin, pour le soleil de 19 h 50, quand elles sont les plus longues
     setDaylight(0.12);
-    const { shadow, forest } = paintGround(trees, world.uSunDir.value.clone());
-    world.uShadowMap.value = shadow;
-    terrainMat.uniforms.uForest.value = forest;
+    const painted = paintGround(trees, world.uSunDir.value.clone());
+    world.uShadowMap.value = painted.shadow;
+    terrainMat.uniforms.uForest.value = painted.forest;
     setDaylight(0);
 
-    progress(0.55, 'Herbes hautes');
+    progress(0.5, 'Fougères, souches et rochers');
+    await step();
+    const under = createUndergrowth();
+    this.stats.undergrowth = Object.values(under.counts).reduce((a, b) => a + b, 0);
+    this.scene.add(under.group);
+
+    progress(0.62, 'Herbes hautes');
     await step();
     const blades = window.innerWidth < 800 ? 26000 : 52000;
     const grass = createGrass(blades);
@@ -100,7 +110,31 @@ export class World {
     this.dandelions.onBlow = () => this.onBlow?.();
     this.scene.add(this.dandelions.group);
 
-    progress(0.9, 'Compilation des matériaux');
+    progress(0.88, 'Ombres portées');
+    await step();
+    // casters : les deux familles d'arbres, plus les buissons et les souches qui bordent le sentier
+    const casters: Caster[] = [];
+    const push = (mesh: THREE.InstancedMesh, positions: THREE.Vector3[]) => casters.push({ source: mesh, points: positions });
+    const kinds = ['conifer', 'broadleaf'] as const;
+    forestGroup.children.forEach((child, i) => {
+      const mesh = child as THREE.InstancedMesh;
+      push(mesh, trees.filter((t) => t.kind === i).map((t) => new THREE.Vector3(t.x, t.y, t.z)));
+      void kinds;
+    });
+    for (const name of ['bush', 'stump', 'log']) {
+      const mesh = under.group.getObjectByName(name) as THREE.InstancedMesh | undefined;
+      if (!mesh) continue;
+      const m = new THREE.Matrix4();
+      const pts: THREE.Vector3[] = [];
+      for (let i = 0; i < mesh.count; i++) {
+        mesh.getMatrixAt(i, m);
+        pts.push(new THREE.Vector3().setFromMatrixPosition(m));
+      }
+      push(mesh, pts);
+    }
+    this.shadow = new SunShadow(casters);
+
+    progress(0.94, 'Compilation des matériaux');
     await step();
     this.resize();
     this.walk.update(1);
@@ -164,6 +198,8 @@ export class World {
       this.onHover?.(hover);
     }
 
+    // ombres portées : une passe courte, seulement quand le soleil est encore levé
+    this.shadow.update(this.renderer, this.camera, world.uSunDir.value);
     this.updateRays();
 
     // le lac ne coûte un second rendu que lorsqu'il est dans le champ

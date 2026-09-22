@@ -204,6 +204,7 @@ function setupMetrics(world: World) {
   const nf = new Intl.NumberFormat('fr-FR');
   out('trees').textContent = nf.format(world.stats.trees);
   out('blades').textContent = nf.format(world.stats.blades);
+  out('under').textContent = nf.format(world.stats.undergrowth);
   let last = performance.now();
   let frames = world.stats.frames;
   setInterval(() => {

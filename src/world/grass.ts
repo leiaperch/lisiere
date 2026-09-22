@@ -98,12 +98,13 @@ export function createGrass(count: number) {
         vec3 base = vec3(0.05, 0.08, 0.025);
         vec3 tip = mix(vec3(0.30, 0.34, 0.12), vec3(0.46, 0.36, 0.14), vHue);
         vec3 albedo = mix(base, tip, smoothstep(0.0, 1.0, vTip));
-        float shadow = groundShadow(vWorld);
-        float ndl = max(dot(normalize(vNormal), uSunDir), 0.0) * 0.6 + 0.4;
+        float ndl = max(dot(normalize(vNormal), uSunDir), 0.0);
+        float shadow = sunShadow(vWorld, ndl);
+        ndl = ndl * 0.6 + 0.4;
         // les pointes s'allument quand on regarde vers le soleil
         float back = pow(max(dot(-v, uSunDir), 0.0), 4.0) * vTip;
         vec3 sun = uSunColor * (ndl * 0.7 + back * 1.8 * vec3(1.0, 0.8, 0.4)) * shadow;
-        vec3 amb = mix(uSkyHorizon, uSkyTop, 0.6) * uAmbient * (0.35 + vTip * 0.65);
+        vec3 amb = mix(uSkyHorizon, uSkyTop, 0.6) * uAmbient * (0.35 + vTip * 0.65) * (0.75 + 0.25 * shadow);
         vec3 col = albedo * (sun + amb + lantern(vWorld, vec3(0.0, 1.0, 0.0)));
         col = applyFog(col, vWorld, cameraPosition);
         gl_FragColor = vec4(col, 1.0);
