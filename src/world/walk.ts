@@ -59,6 +59,9 @@ export class Walk {
   private dir = new THREE.Vector3();
   private reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   private stride = 0;
+  private scrollU = 0; // dernier défilement brut, avant recalage
+  private mapFrom = 0; // défilement au moment du choix
+  private mapTo = 0; // avancement au même instant
 
   constructor(private camera: THREE.PerspectiveCamera) {
     window.addEventListener('pointermove', (e) => {
@@ -86,15 +89,31 @@ export class Walk {
     return !this.chosen && this.current > SEGMENTS[START].length - 14;
   }
 
-  /** le défilement de la page, 0 → 1 */
+  /**
+   * Le défilement de la page, 0 → 1.
+   *
+   * Pendant l'attente à la fourche, la page continue de défiler alors que la marche, elle, est
+   * arrêtée : un écart se creuse entre les deux. Sans rien faire, cet écart se libère d'un coup
+   * au moment du choix et le promeneur part en courant. On recale donc l'échelle au moment où
+   * la branche est prise : le défilement restant couvre exactement la branche restante.
+   */
   set u(v: number) {
-    this.target = THREE.MathUtils.clamp(v, 0, 1) * TOTAL_LENGTH;
+    this.scrollU = THREE.MathUtils.clamp(v, 0, 1);
+    let x = this.scrollU;
+    if (this.chosen) {
+      const span = Math.max(1 - this.mapFrom, 0.02);
+      x = this.mapTo + ((this.scrollU - this.mapFrom) * (1 - this.mapTo)) / span;
+    }
+    this.target = THREE.MathUtils.clamp(x, 0, 1) * TOTAL_LENGTH;
   }
 
   choose(id: string) {
     if (this.chosen || !SEGMENTS[START].next.includes(id)) return;
     this.chosen = id;
     this.route = [START, id];
+    this.mapFrom = this.scrollU;
+    this.mapTo = this.current / TOTAL_LENGTH;
+    this.target = this.current; // on repart d'où l'on est, sans sursaut
   }
 
   // renvoie vrai tant que la caméra bouge encore
