@@ -140,6 +140,9 @@ function setupWalk(world: World) {
   const white = new THREE.Color('#ffffff');
   let frame = 0;
 
+  const forkHint = $('#fork-hint');
+  world.onStuck = (stuck) => forkHint.classList.toggle('gone', !stuck);
+
   world.onFrame = (t) => {
     const i = STEPS.findIndex((s) => t < s.to);
     if (i >= 0) show(i);

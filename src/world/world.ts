@@ -34,12 +34,16 @@ export class World {
   private ocean!: THREE.Mesh;
   private bog!: THREE.Mesh;
   private choice: string | null = null;
+  private coast = 0;
   private choiceGlow = 0;
+  private stuck = false;
   /** ce que le curseur survole : sert à changer le curseur de la page */
   hover: 'bird' | 'flower' | 'water' | 'path' | null = null;
   onHover?: (what: 'bird' | 'flower' | 'water' | 'path' | null) => void;
   /** appelé quand le promeneur s'engage sur une branche */
   onChoose?: (id: string) => void;
+  /** appelé quand on continue à faire défiler sans avoir choisi de chemin */
+  onStuck?: (stuck: boolean) => void;
   onBirds?: () => void;
   onBlow?: () => void;
   onSplash?: () => void;
@@ -60,7 +64,7 @@ export class World {
     this.walk = new Walk(this.camera);
     window.addEventListener('pointermove', (e) => this.pointer.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1));
     window.addEventListener('pointerleave', () => this.pointer.set(-10, -10));
-    this.renderer.domElement.addEventListener('pointerdown', () => this.throwStone());
+    this.renderer.domElement.addEventListener('pointerdown', (e) => this.throwStone(e));
     new ResizeObserver(() => this.resize()).observe(host);
   }
 
@@ -197,11 +201,17 @@ export class World {
     setDaylight(this.daylightAt(t));
     // chaque branche a son air : épais et chargé d'humidité au marais, lavé par le large sur la côte
     const advance = THREE.MathUtils.smoothstep(t, FORK_AT, FORK_AT + 0.28);
+    this.coast = this.walk.route[1] === 'cote' ? advance : 0;
     if (this.walk.route[1] === 'marais') world.uFogDensity.value *= 1 + advance * 0.9;
-    else if (this.walk.route[1] === 'cote') world.uFogDensity.value *= 1 - advance * 0.55;
+    else if (this.coast > 0) {
+      world.uFogDensity.value *= 1 - this.coast * 0.55;
+      // sur la dune, plus rien ne cache le ciel, et le sable comme l'eau renvoient la lumière :
+      // l'ambiante y est franchement plus haute que sous les arbres
+      world.uAmbient.value *= 1 + this.coast * 0.7;
+    }
     world.uTime.value = time;
     this.post.uniforms.uTime.value = time;
-    this.post.uniforms.uExposure.value = state.exposure;
+    this.post.uniforms.uExposure.value = state.exposure * (1 + this.coast * 0.14);
     this.post.uniforms.uGrade.value.copy(state.grade);
 
     // lucioles et lanterne arrivent avec la nuit
@@ -266,7 +276,12 @@ export class World {
     return this.walk.route[1] === 'marais' && this.walk.progress > 0.86;
   }
 
-  private throwStone() {
+  private throwStone(e?: PointerEvent) {
+    // au doigt, aucun survol ne précède le contact : on relit le pointeur au moment du clic
+    if (e && this.walk.waiting) {
+      this.pointer.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
+      this.updateChoice(0.016);
+    }
     if (this.choice) {
       // au lieu de lancer une pierre, le clic engage sur le chemin survolé
       const id = this.choice;
@@ -312,6 +327,13 @@ export class World {
     }
     this.choiceGlow += ((found ? 1 : 0) - this.choiceGlow) * (1 - Math.exp(-dt * 6));
     uChoice.set(FORK.x, FORK.z, 0, this.choiceGlow);
+
+    // on continue à faire défiler alors que le promeneur attend : il faut le dire
+    const stuck = this.walk.blocked;
+    if (stuck !== this.stuck) {
+      this.stuck = stuck;
+      this.onStuck?.(stuck);
+    }
   }
 
   // rayons : actifs quand le soleil est au-dessus de l'horizon et devant le promeneur

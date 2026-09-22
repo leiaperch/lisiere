@@ -91,7 +91,7 @@ export const FORK_AT = SEGMENTS.approche.length / TOTAL_LENGTH;
  * retient : on arrive sur la dune au moment où le soleil touche l'eau. Vers le marais, elle va
  * jusqu'au bout, et la nuit tombe sur l'étang. Les deux fins ne se ressemblent pas.
  */
-export const TIME_RATE: Record<string, number> = { cote: 0.3, marais: 1 };
+export const TIME_RATE: Record<string, number> = { cote: 0.2, marais: 1 };
 
 // ───────────── champ de distances ─────────────
 

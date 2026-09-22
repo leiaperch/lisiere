@@ -27,8 +27,8 @@ export const KEYS: LightKey[] = [
   { t: 0.0, clock: 19 * 60 + 40, sunElevation: 11, sunAzimuth: -28, sun: '#ffc27a', sunPower: 3.2, skyTop: '#4f7fb8', skyHorizon: '#ffcf8a', fog: '#b98458', fogDensity: 0.0042, ambient: 0.55, exposure: 1.0, grade: '#3a2a1a', fireflies: 0, lantern: 0, moon: 0, temperature: 21 },
   { t: 0.24, clock: 19 * 60 + 58, sunElevation: 5, sunAzimuth: -22, sun: '#ffab5c', sunPower: 3.4, skyTop: '#44699f', skyHorizon: '#ffb070', fog: '#9c6c4a', fogDensity: 0.0075, ambient: 0.45, exposure: 1.02, grade: '#2e2418', fireflies: 0, lantern: 0, moon: 0, temperature: 19 },
   { t: 0.48, clock: 20 * 60 + 20, sunElevation: 1.2, sunAzimuth: -14, sun: '#ff8a5a', sunPower: 2.4, skyTop: '#394b80', skyHorizon: '#f08c72', fog: '#7c5a66', fogDensity: 0.01, ambient: 0.38, exposure: 1.05, grade: '#2a2030', fireflies: 0.1, lantern: 0, moon: 0.1, temperature: 17 },
-  { t: 0.72, clock: 20 * 60 + 45, sunElevation: -4, sunAzimuth: -8, sun: '#8a8fd6', sunPower: 0.5, skyTop: '#16204a', skyHorizon: '#50609a', fog: '#2c3560', fogDensity: 0.012, ambient: 0.3, exposure: 1.1, grade: '#141a33', fireflies: 1, lantern: 0.7, moon: 0.5, temperature: 15 },
-  { t: 1.0, clock: 21 * 60 + 10, sunElevation: -10, sunAzimuth: 0, sun: '#6b78c9', sunPower: 0.15, skyTop: '#060a1a', skyHorizon: '#18214a', fog: '#121a36', fogDensity: 0.01, ambient: 0.22, exposure: 1.18, grade: '#0a0f24', fireflies: 0.8, lantern: 1, moon: 1, temperature: 13 },
+  { t: 0.72, clock: 20 * 60 + 45, sunElevation: -4, sunAzimuth: -8, sun: '#8a8fd6', sunPower: 0.5, skyTop: '#16204a', skyHorizon: '#50609a', fog: '#2c3560', fogDensity: 0.012, ambient: 0.36, exposure: 1.1, grade: '#141a33', fireflies: 1, lantern: 0.7, moon: 0.5, temperature: 15 },
+  { t: 1.0, clock: 21 * 60 + 10, sunElevation: -10, sunAzimuth: 0, sun: '#6b78c9', sunPower: 0.15, skyTop: '#060a1a', skyHorizon: '#18214a', fog: '#121a36', fogDensity: 0.01, ambient: 0.28, exposure: 1.18, grade: '#0a0f24', fireflies: 0.8, lantern: 1, moon: 1, temperature: 13 },
 ];
 
 // Uniformes partagés par tous les matériaux de la forêt

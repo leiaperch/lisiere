@@ -169,7 +169,7 @@ export function createTerrain() {
         // le sable : clair et ridé sur la dune, foncé et lisse là où la mer vient le mouiller
         float wet = 1.0 - smoothstep(${SEA.shore.toFixed(1)} - 4.0, ${SEA.shore.toFixed(1)} + 10.0, vWorld.z);
         float ridges = fbm(vec2(vWorld.x * 0.8, vWorld.z * 0.12));
-        vec3 sand = mix(vec3(0.52, 0.47, 0.38), vec3(0.66, 0.60, 0.48), ridges);
+        vec3 sand = mix(vec3(0.62, 0.56, 0.45), vec3(0.78, 0.71, 0.57), ridges);
         sand = mix(sand, vec3(0.26, 0.25, 0.23), wet);
         albedo = mix(albedo, sand, biome.a);
 

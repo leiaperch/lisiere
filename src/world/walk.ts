@@ -76,6 +76,11 @@ export class Walk {
     return this.chosen ? TOTAL_LENGTH : SEGMENTS[START].length;
   }
 
+  /** vrai quand on fait défiler au-delà de la fourche sans avoir choisi de chemin */
+  get blocked() {
+    return !this.chosen && this.target > SEGMENTS[START].length + 8;
+  }
+
   /** vrai quand le promeneur attend à la fourche */
   get waiting() {
     return !this.chosen && this.current > SEGMENTS[START].length - 14;
