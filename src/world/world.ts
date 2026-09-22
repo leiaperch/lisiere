@@ -12,6 +12,7 @@ import { createUndergrowth } from './undergrowth';
 import { createVineyard } from './vines';
 import { SunShadow, type Caster } from './shadow';
 import { createCrasteBanks, createCrasteWater, createDeck } from './craste';
+import { createBasinWater, createCabane, createEstey, createEsteyWater, createPignots } from './bassin';
 import { Post } from './post';
 import { Walk } from './walk';
 
@@ -36,6 +37,7 @@ export class World {
   private shadow!: SunShadow;
   private terrainMat!: THREE.ShaderMaterial;
   private ocean!: THREE.Mesh;
+  private basin!: THREE.Group;
   private bog!: THREE.Mesh;
   private craste!: THREE.Mesh;
   private banks!: THREE.Mesh;
@@ -145,6 +147,10 @@ export class World {
     this.ocean = createOcean();
     this.scene.add(this.ocean);
 
+    this.basin = new THREE.Group();
+    this.basin.add(createBasinWater(), createEstey((x, z) => heightAt(x, z)), createEsteyWater(), createPignots(), createCabane());
+    this.scene.add(this.basin);
+
     progress(0.82, 'Oiseaux, aigrettes et pissenlits');
     await step();
     this.birds = new Birds();
@@ -193,7 +199,7 @@ export class World {
   /** heure de la balade : elle ralentit sur la branche du littoral, pour finir au couchant */
   private daylightAt(t: number) {
     if (t <= FORK_AT) return t;
-    const rate = TIME_RATE[this.walk.route[1]] ?? 1;
+    const rate = TIME_RATE[this.walk.branch ?? ''] ?? 1;
     return FORK_AT + (t - FORK_AT) * rate;
   }
 
@@ -230,8 +236,8 @@ export class World {
     setDaylight(this.daylightAt(t));
     // chaque branche a son air : épais et chargé d'humidité au marais, lavé par le large sur la côte
     const advance = THREE.MathUtils.smoothstep(t, FORK_AT, FORK_AT + 0.28);
-    this.coast = this.walk.route[1] === 'cote' ? advance : 0;
-    if (this.walk.route[1] === 'marais') {
+    this.coast = this.walk.branch === 'cote' ? advance : 0;
+    if (this.walk.branch === 'marais') {
       world.uFogDensity.value *= 1 + advance * 0.6;
       // la tourbe est à découvert et l'eau renvoie le ciel : il y fait moins noir que sous les arbres
       world.uAmbient.value *= 1 + advance * 0.3;
@@ -274,8 +280,8 @@ export class World {
 
     // chaque eau n'est dessinée que sur la branche où elle se trouve ; le lac, qui coûte un
     // second rendu de la scène, n'apparaît qu'une fois sa rive en vue
-    const marsh = this.walk.route[1] === 'marais';
-    const coast = this.walk.route[1] === 'cote';
+    const marsh = this.walk.branch === 'marais';
+    const coast = this.walk.branch === 'cote';
     this.lake.mesh.visible = marsh && t > 0.8;
     this.bog.visible = marsh && t > 0.6;
     this.craste.visible = marsh;
@@ -283,6 +289,8 @@ export class World {
     this.egrets.mesh.visible = marsh;
     this.deck.visible = marsh;
     this.ocean.visible = coast && t > 0.6;
+    // le bassin n'apparaît qu'une fois la dune franchie : avant, il est derrière l'horizon
+    this.basin.visible = coast && t > 0.78;
 
     // flou de respiration : monte vite, redescend lentement
     this.blurTween = Math.max(0, this.blurTween - dt * 1.4);
@@ -311,7 +319,7 @@ export class World {
 
   /** vrai quand le promeneur est assez près de l'étang pour lancer une pierre */
   private get atLake() {
-    return this.walk.route[1] === 'marais' && this.walk.progress > 0.86;
+    return this.walk.branch === 'marais' && this.walk.progress > 0.86;
   }
 
   private throwStone(e?: PointerEvent) {

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { surfaceAt } from './terrain';
-import { SEGMENTS, START, TOTAL_LENGTH, TRUNK, TRUNK_LENGTH, type Position, branchRoute, routePosition } from './paths';
+import { CHOICES, START, TOTAL_LENGTH, TRUNK, TRUNK_LENGTH, type Position, branchRoute, routePosition } from './paths';
 
 // La marche : la caméra avance sur le sentier à hauteur d'yeux. Le défilement choisit la distance
 // parcourue, un amorti léger la rejoint. Le regard suit le chemin, avec des intentions par endroit
@@ -87,6 +87,11 @@ export class Walk {
     });
   }
 
+  /** la branche prise, ou null tant qu'on est sur le tronc commun */
+  get branch(): string | null {
+    return this.route[TRUNK.length] ?? null;
+  }
+
   /** avancement global, 0 → 1 : pilote l'heure, le son et l'interface */
   get progress() {
     return THREE.MathUtils.clamp(this.current / TOTAL_LENGTH, 0, 1);
@@ -126,7 +131,7 @@ export class Walk {
   }
 
   choose(id: string) {
-    if (this.chosen || !SEGMENTS[START].next.includes(id)) return;
+    if (this.chosen || !CHOICES.includes(id)) return;
     this.chosen = id;
     this.route = [...TRUNK, ...branchRoute(id)];
     this.mapFrom = this.scrollU;

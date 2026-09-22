@@ -49,9 +49,10 @@ export function createGrass(count: number) {
     // l'herbe est haute en forêt, clairsemée au marais, absente du sable
     if (coastMask(x, z) > 0.3) continue;
     const biome = biomeAt(x, z);
-    if (biome === 'marais' && rand() > 0.45) continue;
+    if (biome === 'bassin' || biome === 'vigne') continue;
+    if ((biome === 'marais' || biome === 'delta') && rand() > 0.45) continue;
     if (biome === 'dune' && rand() > 0.5) continue;
-    const short = biome === 'dune' ? 0.7 : biome === 'marais' ? 0.85 : 1;
+    const short = biome === 'dune' ? 0.7 : biome === 'marais' || biome === 'delta' ? 0.85 : 1;
     const tall = (0.35 + rand() * 0.45 + THREE.MathUtils.smoothstep(d, 2, 8) * 0.35) * short;
     offsets.set([x, heightAt(x, z, d), z, tall], n * 4);
     params.set([rand() * Math.PI, rand(), rand()], n * 3);

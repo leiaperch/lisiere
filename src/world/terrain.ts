@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import { glslNoise, glslWorld, world } from './light';
 import { BIOMES, SEGMENTS, biomeWeights, buildFields, trailDistance } from './paths';
 import { CRASTE, crasteDistance, crasteProfile, deckHeight } from './craste';
+import { BASSIN, ESTEY_REACH, esteyDistance, esteyProfile } from './bassin';
+
+export { BASSIN };
 
 export { trailDistance };
 export type { BiomeId } from './paths';
@@ -11,9 +14,6 @@ export type { BiomeId } from './paths';
 //
 // La clairière est sur le tronc commun, avant la fourche. Ensuite, chaque branche a son accident :
 // la dune puis la plage côté océan, la tourbière et l'étang côté marais.
-
-/** la lagune du bassin, derrière la flèche de sable : eaux calmes, marnage, prés salés */
-export const BASSIN = { x: 150, z: -300, radius: 100, level: -2.5 };
 
 /** l'étang, au bout du marais : c'est là que l'on fait des ricochets */
 export const LAKE = { x: 80, z: -202, radius: 27, level: -3.0 };
@@ -88,12 +88,22 @@ export function heightAt(x: number, z: number, dTrail = trailDistance(x, z)) {
   }
 
   // côté bassin : le schorre, presque plat, à peine au-dessus de l'eau, puis la vasière
-  const db = Math.hypot(x - BASSIN.x, z - BASSIN.z);
+  // le trait de côte est brouillé : une lagune n'a pas un rivage en arc de cercle
+  const db = Math.hypot(x - BASSIN.x, z - BASSIN.z) + (fbm(x * 0.022 + 5, z * 0.022) - 0.5) * 30;
   const tide = 1 - THREE.MathUtils.smoothstep(db, BASSIN.radius * 0.72, BASSIN.radius * 1.45);
   if (tide > 0.001) {
     const schorre = BASSIN.level + 0.5 + (fbm(x * 0.05 + 12, z * 0.05) - 0.5) * 0.5;
-    const slikke = BASSIN.level - 1.5;
-    h = THREE.MathUtils.lerp(h, THREE.MathUtils.lerp(schorre, slikke, THREE.MathUtils.smoothstep(db, BASSIN.radius * 1.15, BASSIN.radius * 0.8)), tide);
+    const slikke = BASSIN.level - 1.6;
+    // près du large la vasière plonge sous l'eau, en bordure le schorre reste au sec
+    const wet = 1 - THREE.MathUtils.smoothstep(db, BASSIN.radius * 0.8, BASSIN.radius * 1.15);
+    h = THREE.MathUtils.lerp(h, THREE.MathUtils.lerp(schorre, slikke, wet), tide);
+  }
+
+  // l'estey : même principe que la craste, le lit est dessiné à part
+  const de = esteyDistance(x, z);
+  if (de < ESTEY_REACH) {
+    const off = 0.45 * (1 - THREE.MathUtils.smoothstep(de, ESTEY_REACH * 0.7, ESTEY_REACH));
+    h = Math.min(h, esteyProfile(de, h) - off);
   }
 
   // la craste : le terrain se contente de descendre sous les berges, dessinées à part

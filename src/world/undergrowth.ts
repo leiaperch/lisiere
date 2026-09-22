@@ -8,7 +8,7 @@ import { glslNoise, glslWorld, world } from './light';
 // Le sous-bois : fougères, buissons, souches, troncs couchés et rochers. Cinq familles semées
 // selon des règles (densité de forêt, distance au sentier), chacune dessinée en une instance.
 
-export type Kind = 'fern' | 'bush' | 'stump' | 'log' | 'rock' | 'reed' | 'oyat' | 'molinie' | 'linaigrette';
+export type Kind = 'fern' | 'bush' | 'stump' | 'log' | 'rock' | 'reed' | 'oyat' | 'molinie' | 'linaigrette' | 'salicorne';
 
 interface Piece {
   x: number;
@@ -176,6 +176,19 @@ function linaigrette() {
   return parts;
 }
 
+function salicorne() {
+  // salicorne et obione : des coussins bas et charnus, seule chose qui pousse sur le schorre
+  const parts: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < 9; i++) {
+    const r = 0.1 + rand() * 0.12;
+    const b = new THREE.IcosahedronGeometry(r, 0);
+    b.scale(1, 1.7, 1);
+    b.translate((rand() - 0.5) * 0.5, r * 1.1, (rand() - 0.5) * 0.5);
+    parts.push(b);
+  }
+  return parts;
+}
+
 function jitter(g: THREE.BufferGeometry, amount: number) {
   const p = g.attributes.position as THREE.BufferAttribute;
   for (let i = 0; i < p.count; i++) {
@@ -211,6 +224,7 @@ const RULES: Record<Kind, { count: number; near: [number, number]; forest: numbe
   rock: { count: 300, near: [2.2, 32], forest: 0, scale: [0.5, 1.6], clearing: true, biomes: ['foret'] },
   reed: { count: 700, near: [1.1, 22], forest: 0, scale: [0.7, 1.6], clearing: true, biomes: ['marais'] },
   oyat: { count: 1500, near: [1.0, 42], forest: 0, scale: [0.7, 1.6], clearing: true, biomes: ['dune'] },
+  salicorne: { count: 1100, near: [1.0, 34], forest: 0, scale: [0.7, 1.5], clearing: true, biomes: ['bassin'] },
   molinie: { count: 1400, near: [1.0, 40], forest: 0, scale: [0.8, 1.7], clearing: true, biomes: ['marais'] },
   linaigrette: { count: 900, near: [1.2, 30], forest: 0, scale: [0.8, 1.2], clearing: true, biomes: ['marais'] },
 };
@@ -249,6 +263,7 @@ const PALETTES: Record<Kind, [string, string]> = {
   reed: ['#3d4420', '#6e7038'],
   oyat: ['#4a5442', '#8d9070'],
   molinie: ['#3b3a1c', '#7a6a33'],
+  salicorne: ['#2b3327', '#6b5240'],
   linaigrette: ['#33401f', '#efe9dc'],
 };
 
@@ -320,6 +335,7 @@ export function createUndergrowth() {
     reed: build(reed()),
     oyat: build(oyat()),
     molinie: build(molinie()),
+    salicorne: build(salicorne()),
     linaigrette: build(linaigrette()),
   };
   const dummy = new THREE.Object3D();

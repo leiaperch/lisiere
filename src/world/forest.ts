@@ -41,6 +41,8 @@ export function plantForest(): Tree[] {
     if (crasteDistance(x, z) < CRASTE.bank + 2) continue;
 
     const biome = biomeAt(x, z);
+    // ni dans les rangs de vigne, ni sur le schorre : ces terres-là n'ont pas d'arbres
+    if (biome === 'vigne' || biome === 'bassin') continue;
     const shore = coastMask(x, z);
     // rien ne pousse sur le sable nu : la forêt s'arrête au pied de la dune
     if (shore > 0.45 && z < DUNE.z + 34) continue;
@@ -49,7 +51,7 @@ export function plantForest(): Tree[] {
     let density: number;
     let kind: 0 | 1 | 2 | 3;
     let small = 1;
-    if (biome === 'marais') {
+    if (biome === 'marais' || biome === 'delta') {
       // le marais n'a plus que des arbres clairsemés, et beaucoup de troncs morts debout
       density = noise * 0.55;
       kind = noise > 0.58 ? 1 : 2;
