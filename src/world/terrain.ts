@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { glslNoise, glslWorld, world } from './light';
 import { SEGMENTS, biomeWeights, buildFields, trailDistance } from './paths';
+import { CRASTE, crasteDistance, crasteProfile, deckHeight } from './craste';
 
 export { trailDistance };
 export type { BiomeId } from './paths';
@@ -86,11 +87,26 @@ export function heightAt(x: number, z: number, dTrail = trailDistance(x, z)) {
   const bog = 1 - THREE.MathUtils.smoothstep(dm, MARSH.radius * 0.55, MARSH.radius * 1.35);
   h = THREE.MathUtils.lerp(h, MARSH.level - 0.6, bog);
 
+  // la craste : le terrain se contente de descendre sous les berges, qui sont dessinées à part
+  // Le terrain suit le même profil que les berges, mais toujours un demi-mètre plus bas : sinon
+  // il ressort entre les facettes du fossé et le talus se strie.
+  const dcr = crasteDistance(x, z);
+  if (dcr < CRASTE.bank) {
+    // l'écart se referme au bord, sinon le terrain tombe d'une marche au ras de la berge
+    const off = 0.5 * (1 - THREE.MathUtils.smoothstep(dcr, CRASTE.bank * 0.7, CRASTE.bank));
+    h = Math.min(h, crasteProfile(dcr, h) - off);
+  }
+
   // cuvette de l'étang
   const dl = Math.hypot(x - LAKE.x, z - LAKE.z);
   const basin = 1 - THREE.MathUtils.smoothstep(dl, LAKE.radius * 0.7, LAKE.radius * 1.3);
   h = THREE.MathUtils.lerp(h, LAKE.level - 1.8, basin);
   return h;
+}
+
+/** hauteur sur laquelle on marche : le sol, ou le platelage quand on franchit la craste */
+export function surfaceAt(x: number, z: number) {
+  return deckHeight(x, z) ?? heightAt(x, z, 0);
 }
 
 /**

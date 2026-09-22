@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { heightAt } from './terrain';
+import { surfaceAt } from './terrain';
 import { SEGMENTS, START, TOTAL_LENGTH, type Position, routePosition } from './paths';
 
 // La marche : la caméra avance sur le sentier à hauteur d'yeux. Le défilement choisit la distance
@@ -139,7 +139,7 @@ export class Walk {
     // pas : léger balancement proportionnel à la vitesse de marche
     this.stride += speed * dt * 110;
     const bob = this.reduced ? 0 : Math.min(speed * 7, 1) * 0.035;
-    const ground = heightAt(this.p.x, this.p.z, 0);
+    const ground = surfaceAt(this.p.x, this.p.z);
     this.camera.position.set(this.p.x + Math.cos(this.stride * 0.5) * bob * 0.6, ground + this.eye + Math.abs(Math.sin(this.stride)) * bob, this.p.z);
 
     // en bout de branche, on regarde dans l'axe du sentier plutôt que vers un point confondu

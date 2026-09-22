@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CLEARING, LAKE, MARSH, coastMask, heightAt } from './terrain';
 import { biomeAt, trailDistance } from './paths';
+import { CRASTE, crasteDistance } from './craste';
 import { glslNoise, glslWorld, world } from './light';
 
 // Herbes hautes le long du sentier et dans la clairière : un brin = 5 sommets, des dizaines de
@@ -44,6 +45,7 @@ export function createGrass(count: number) {
     if (d < 1.4 || d > 26) continue;
     if (Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.radius * 1.02) continue;
     if (Math.hypot(x - MARSH.x, z - MARSH.z) < MARSH.radius * 0.95) continue;
+    if (crasteDistance(x, z) < CRASTE.bank + 0.4) continue;
     // l'herbe est haute en forêt, clairsemée au marais, absente du sable
     if (coastMask(x, z) > 0.3) continue;
     const biome = biomeAt(x, z);

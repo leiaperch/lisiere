@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { CLEARING, DUNE, LAKE, MARSH, coastMask, fbm, heightAt } from './terrain';
 import { biomeAt, trailDistance } from './paths';
+import { CRASTE, crasteDistance } from './craste';
 import { glslNoise, glslWorld, world } from './light';
 
 // La forêt : quelques milliers d'arbres en deux familles, placés une fois selon des règles
@@ -37,6 +38,7 @@ export function plantForest(): Tree[] {
     if (dc < CLEARING.radius * (0.9 + rand() * 0.3)) continue;
     if (dl < LAKE.radius * 1.1) continue;
     if (dm < MARSH.radius * 1.1) continue;
+    if (crasteDistance(x, z) < CRASTE.bank + 2) continue;
 
     const biome = biomeAt(x, z);
     const shore = coastMask(x, z);

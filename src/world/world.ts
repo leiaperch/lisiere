@@ -6,9 +6,11 @@ import { createForest, paintGround, plantForest } from './forest';
 import { createGrass } from './grass';
 import { createFireflies, createLake, createMarshWater, createOcean, createSky, type Lake } from './sky';
 import { Birds } from './fauna';
+import { Egrets } from './egret';
 import { Dandelions } from './flora';
 import { createUndergrowth } from './undergrowth';
 import { SunShadow, type Caster } from './shadow';
+import { createCrasteBanks, createCrasteWater, createDeck } from './craste';
 import { Post } from './post';
 import { Walk } from './walk';
 
@@ -27,12 +29,16 @@ export class World {
   private fireflies!: THREE.Points;
   private lake!: Lake;
   private birds!: Birds;
+  private egrets!: Egrets;
   private dandelions!: Dandelions;
   private pointerRay: THREE.Ray | null = null;
   private shadow!: SunShadow;
   private terrainMat!: THREE.ShaderMaterial;
   private ocean!: THREE.Mesh;
   private bog!: THREE.Mesh;
+  private craste!: THREE.Mesh;
+  private banks!: THREE.Mesh;
+  private deck!: THREE.Mesh;
   private choice: string | null = null;
   private coast = 0;
   private choiceGlow = 0;
@@ -121,14 +127,23 @@ export class World {
     this.scene.add(this.lake.mesh);
     this.bog = createMarshWater();
     this.scene.add(this.bog);
+    this.craste = createCrasteWater();
+    this.scene.add(this.craste);
+    this.banks = createCrasteBanks((x, z) => heightAt(x, z));
+    this.scene.add(this.banks);
+    this.deck = createDeck();
+    this.scene.add(this.deck);
     this.ocean = createOcean();
     this.scene.add(this.ocean);
 
-    progress(0.82, 'Oiseaux et pissenlits');
+    progress(0.82, 'Oiseaux, aigrettes et pissenlits');
     await step();
     this.birds = new Birds();
     this.birds.onTakeOff = () => this.onBirds?.();
     this.scene.add(this.birds.mesh);
+    this.egrets = new Egrets();
+    this.egrets.onTakeOff = () => this.onBirds?.();
+    this.scene.add(this.egrets.mesh);
     this.dandelions = new Dandelions();
     this.dandelions.onBlow = () => this.onBlow?.();
     this.scene.add(this.dandelions.group);
@@ -207,7 +222,11 @@ export class World {
     // chaque branche a son air : épais et chargé d'humidité au marais, lavé par le large sur la côte
     const advance = THREE.MathUtils.smoothstep(t, FORK_AT, FORK_AT + 0.28);
     this.coast = this.walk.route[1] === 'cote' ? advance : 0;
-    if (this.walk.route[1] === 'marais') world.uFogDensity.value *= 1 + advance * 0.9;
+    if (this.walk.route[1] === 'marais') {
+      world.uFogDensity.value *= 1 + advance * 0.6;
+      // la tourbe est à découvert et l'eau renvoie le ciel : il y fait moins noir que sous les arbres
+      world.uAmbient.value *= 1 + advance * 0.3;
+    }
     else if (this.coast > 0) {
       world.uFogDensity.value *= 1 - this.coast * 0.55;
       // sur la dune, plus rien ne cache le ciel, et le sable comme l'eau renvoient la lumière :
@@ -229,11 +248,12 @@ export class World {
     // interactions : le rayon du curseur sert aux oiseaux, aux pissenlits et aux ricochets
     this.pointerRay = this.pointer.x < -2 ? null : (this.ray.setFromCamera(this.pointer, this.camera), this.ray.ray);
     const overBird = this.birds.update(dt, time, this.camera, this.pointerRay);
+    const overEgret = this.egrets.update(dt, time, this.camera, this.pointerRay);
     this.dandelions.setPixel(ff.uniforms.uPixel.value);
     const overFlower = this.dandelions.update(time, this.pointerRay);
     const overWater = !!this.pointerRay && this.atLake && this.stonePoint() !== null;
     this.updateChoice(dt);
-    const hover = this.choice ? 'path' : overBird ? 'bird' : overFlower ? 'flower' : overWater ? 'water' : null;
+    const hover = this.choice ? 'path' : overBird || overEgret ? 'bird' : overFlower ? 'flower' : overWater ? 'water' : null;
     if (hover !== this.hover) {
       this.hover = hover;
       this.onHover?.(hover);
@@ -249,6 +269,10 @@ export class World {
     const coast = this.walk.route[1] === 'cote';
     this.lake.mesh.visible = marsh && t > 0.8;
     this.bog.visible = marsh && t > 0.6;
+    this.craste.visible = marsh;
+    this.banks.visible = marsh;
+    this.egrets.mesh.visible = marsh;
+    this.deck.visible = marsh;
     this.ocean.visible = coast && t > 0.6;
 
     // flou de respiration : monte vite, redescend lentement

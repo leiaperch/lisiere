@@ -2,12 +2,13 @@ import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { CLEARING, DUNE, LAKE, MARSH, coastMask, fbm, heightAt } from './terrain';
 import { type BiomeId, biomeAt, trailDistance } from './paths';
+import { CRASTE, crasteDistance } from './craste';
 import { glslNoise, glslWorld, world } from './light';
 
 // Le sous-bois : fougères, buissons, souches, troncs couchés et rochers. Cinq familles semées
 // selon des règles (densité de forêt, distance au sentier), chacune dessinée en une instance.
 
-export type Kind = 'fern' | 'bush' | 'stump' | 'log' | 'rock' | 'reed' | 'oyat';
+export type Kind = 'fern' | 'bush' | 'stump' | 'log' | 'rock' | 'reed' | 'oyat' | 'molinie' | 'linaigrette';
 
 interface Piece {
   x: number;
@@ -131,6 +132,50 @@ function oyat() {
   return parts;
 }
 
+function molinie() {
+  // la molinie, l'auguicha des Landes : une grosse touffe dense, aux feuilles retombantes,
+  // qui marque la lande humide bien plus que les roseaux
+  const parts: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < 16; i++) {
+    const h = 0.45 + rand() * 0.45;
+    const blade = new THREE.PlaneGeometry(0.05, h, 1, 4);
+    const pos = blade.attributes.position as THREE.BufferAttribute;
+    // la feuille s'incurve vers l'extérieur : le haut retombe
+    for (let k = 0; k < pos.count; k++) {
+      const t = (pos.getY(k) + h / 2) / h;
+      pos.setZ(k, pos.getZ(k) + t * t * 0.28);
+      pos.setY(k, pos.getY(k) - t * t * 0.1);
+    }
+    blade.translate(0, h / 2, 0);
+    blade.rotateZ((rand() - 0.5) * 0.3);
+    blade.rotateY(rand() * Math.PI * 2);
+    blade.translate((rand() - 0.5) * 0.16, 0, (rand() - 0.5) * 0.16);
+    parts.push(blade);
+  }
+  return parts;
+}
+
+function linaigrette() {
+  // la linaigrette : une tige nue, un épi cotonneux blanc au bout. À contre-jour, ce sont des
+  // centaines de points lumineux qui flottent au-dessus de la tourbe.
+  const parts: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < 7; i++) {
+    const h = 0.55 + rand() * 0.4;
+    const stem = new THREE.CylinderGeometry(0.007, 0.011, h, 3, 1);
+    stem.translate(0, h / 2, 0);
+    const head = new THREE.IcosahedronGeometry(0.032, 1);
+    head.scale(0.8, 1.5, 0.8);
+    head.translate(0, h + 0.03, 0);
+    // le cylindre est indexé, l'icosaèdre non : il faut les ramener au même format
+    const tuft = mergeGeometries([stem.toNonIndexed(), head.toNonIndexed()])!;
+    tuft.rotateZ((rand() - 0.5) * 0.42);
+    tuft.rotateY(rand() * Math.PI * 2);
+    tuft.translate((rand() - 0.5) * 0.3, 0, (rand() - 0.5) * 0.3);
+    parts.push(tuft);
+  }
+  return parts;
+}
+
 function jitter(g: THREE.BufferGeometry, amount: number) {
   const p = g.attributes.position as THREE.BufferAttribute;
   for (let i = 0; i < p.count; i++) {
@@ -164,8 +209,10 @@ const RULES: Record<Kind, { count: number; near: [number, number]; forest: numbe
   stump: { count: 110, near: [3.2, 26], forest: 0.45, scale: [0.7, 1.3], clearing: true, biomes: ['foret', 'marais'] },
   log: { count: 90, near: [3, 28], forest: 0.45, scale: [0.7, 1.2], clearing: false, biomes: ['foret', 'marais'] },
   rock: { count: 300, near: [2.2, 32], forest: 0, scale: [0.5, 1.6], clearing: true, biomes: ['foret'] },
-  reed: { count: 900, near: [1.1, 26], forest: 0, scale: [0.7, 1.6], clearing: true, biomes: ['marais'] },
+  reed: { count: 700, near: [1.1, 22], forest: 0, scale: [0.7, 1.6], clearing: true, biomes: ['marais'] },
   oyat: { count: 1500, near: [1.0, 42], forest: 0, scale: [0.7, 1.6], clearing: true, biomes: ['dune'] },
+  molinie: { count: 1400, near: [1.0, 40], forest: 0, scale: [0.8, 1.7], clearing: true, biomes: ['marais'] },
+  linaigrette: { count: 900, near: [1.2, 30], forest: 0, scale: [0.8, 1.2], clearing: true, biomes: ['marais'] },
 };
 
 function sow(kind: Kind): Piece[] {
@@ -178,6 +225,7 @@ function sow(kind: Kind): Piece[] {
     if (d < rule.near[0] || d > rule.near[1]) continue;
     if (Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.radius * 1.05) continue;
     if (Math.hypot(x - MARSH.x, z - MARSH.z) < MARSH.radius * 0.92) continue;
+    if (crasteDistance(x, z) < CRASTE.bank + 0.6) continue;
     const inClearing = Math.hypot(x - CLEARING.x, z - CLEARING.z) < CLEARING.radius;
     if (inClearing && !rule.clearing) continue;
     if (!rule.biomes.includes(biomeAt(x, z))) continue;
@@ -200,6 +248,8 @@ const PALETTES: Record<Kind, [string, string]> = {
   rock: ['#2f3034', '#5a5b5e'],
   reed: ['#3d4420', '#6e7038'],
   oyat: ['#4a5442', '#8d9070'],
+  molinie: ['#3b3a1c', '#7a6a33'],
+  linaigrette: ['#33401f', '#efe9dc'],
 };
 
 const vertex = /* glsl */ `
@@ -233,6 +283,7 @@ const fragment = /* glsl */ `
   uniform vec3 uDark;
   uniform vec3 uLight;
   uniform float uLeafy;
+  uniform float uTipped;
   varying vec3 vWorld;
   varying vec3 vNormal;
   varying float vHeight;
@@ -242,7 +293,10 @@ const fragment = /* glsl */ `
     if (!gl_FrontFacing) n = -n;
     vec3 v = normalize(cameraPosition - vWorld);
     float grain = fbm(vWorld.xz * 2.2 + vVar.x * 8.0);
-    vec3 albedo = mix(uDark, uLight, vVar.x * 0.5 + grain * 0.5);
+    // les plantes à épi gardent la tige sombre et ne portent leur blanc qu'au sommet
+    float k = mix(vVar.x * 0.5 + grain * 0.5, 0.0, uTipped);
+    vec3 albedo = mix(uDark, uLight, k);
+    albedo = mix(albedo, uLight, uTipped * smoothstep(0.72, 0.96, vHeight));
     float shadow = sunShadow(vWorld, dot(n, uSunDir));
     float wrap = pow(max(dot(n, uSunDir) * 0.5 + 0.5, 0.0), 1.6);
     float ao = mix(0.45, 1.0, smoothstep(0.0, 0.8, vHeight));
@@ -265,6 +319,8 @@ export function createUndergrowth() {
     rock: build(rock()),
     reed: build(reed()),
     oyat: build(oyat()),
+    molinie: build(molinie()),
+    linaigrette: build(linaigrette()),
   };
   const dummy = new THREE.Object3D();
   const counts: Record<string, number> = {};
@@ -278,8 +334,9 @@ export function createUndergrowth() {
         ...world,
         uDark: { value: new THREE.Color(PALETTES[kind][0]) },
         uLight: { value: new THREE.Color(PALETTES[kind][1]) },
-        uSway: { value: kind === 'reed' ? 1.8 : kind === 'oyat' ? 1.4 : kind === 'fern' || kind === 'bush' ? 1 : 0 },
-        uLeafy: { value: kind === 'fern' || kind === 'reed' ? 1 : kind === 'bush' ? 0.6 : kind === 'oyat' ? 0.9 : 0 },
+        uSway: { value: kind === 'reed' ? 1.8 : kind === 'oyat' || kind === 'linaigrette' ? 1.4 : kind === 'molinie' ? 1.1 : kind === 'fern' || kind === 'bush' ? 1 : 0 },
+        uTipped: { value: kind === 'linaigrette' ? 1 : 0 },
+        uLeafy: { value: kind === 'fern' || kind === 'reed' ? 1 : kind === 'bush' ? 0.6 : kind === 'oyat' || kind === 'molinie' ? 0.9 : kind === 'linaigrette' ? 1.6 : 0 },
       },
       vertexShader: vertex,
       fragmentShader: fragment,
