@@ -2,17 +2,18 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { glslNoise, glslWorld, world } from './light';
 
-// Les deux arrivées : l'airial et le village ostréicole.
+// L'airial : l'arrivée de la branche des terres.
 //
-// Les deux branches sortaient du sauvage pour s'arrêter dans un fourré ou sur une vasière. Elles
-// débouchent maintenant sur un lieu habité — une maison sous les chênes d'un côté, une rangée de
-// cabanes et un ponton de l'autre. Dans les deux cas la lumière est allumée à l'intérieur, et
-// c'est la seule chose chaude du paysage à cette heure-là.
+// La clairière herbeuse où l'on bâtissait, ses chênes en cercle large, et la maison landaise avec
+// sa lampe allumée. On s'arrête au bord de la clairière : de près, un bâtiment fait de boîtes se
+// lit comme une maquette ; à trente-cinq mètres, c'est une silhouette et une fenêtre.
+//
+// Il y avait ici un village ostréicole, supprimé : il n'y a pas de terrain sec pour l'accueillir
+// entre la vasière du bassin, l'étang et les bras du delta, et déplacé, il finissait posé au
+// milieu du marais.
 
 /** la clairière habitée, au bout du delta */
 export const AIRIAL = { x: 186, z: -116, radius: 30 };
-/** le village, au bout du bassin */
-export const VILLAGE = { x: 130, z: -256 };
 
 // Toutes les pièces doivent porter exactement les mêmes attributs, sinon la fusion échoue : on
 // retire donc les UV dès la source, le toit n'en ayant pas.
@@ -285,91 +286,6 @@ export function createAirial(groundAt: (x: number, z: number) => number) {
   oaks.frustumCulled = false;
   oaks.name = 'chenes';
   group.add(oaks);
-
-  return group;
-}
-
-/**
- * Le village ostréicole : une rangée de cabanes basses au bord de l'eau, des pinasses échouées sur
- * la vase, et un ponton qui part vers le large.
- */
-export function createVillage(groundAt: (x: number, z: number) => number, waterLevel: number) {
-  const group = new THREE.Group();
-  group.name = 'village';
-
-  // six cabanes alignées le long de la rive, toutes un peu différentes
-  // alignées côté terre, le long du chemin, la façade tournée vers l'eau
-  // Reculées d'une dizaine de mètres et rapetissées : une cabane ostréicole est une pièce unique,
-  // pas une grange. À cinq mètres du chemin et sept mètres de haut, elles écrasaient tout.
-  const cabins: [number, number, number, number][] = [
-    [70, -232, 0.55, 0.85],
-    [78, -224, 0.5, 0.78],
-    [87, -216, 0.45, 0.92],
-    [96, -209, 0.42, 0.8],
-    [105, -203, 0.38, 0.88],
-    [114, -198, 0.35, 0.75],
-  ];
-  for (const [x, z, ry, scale] of cabins) {
-    const w = 5.2 * scale;
-    const d = 3.8 * scale;
-    const h = 2.15 * scale;
-    const parts = [box(w, h, d, 0, h / 2 + 0.4, 0), gable(w * 1.06, 1.05 * scale, d * 1.1, 0, h + 0.4, 0)];
-    // pilotis courts : la cabane ne touche pas la vase
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) parts.push(box(0.2, 0.9, 0.2, (sx * w) / 2.6, 0.25, (sz * d) / 2.6));
-    const cabin = built(parts, 'cabane-ostreicole', 0.15);
-    const y = groundAt(x, z);
-    cabin.position.set(x, y, z);
-    cabin.rotation.y = ry;
-    group.add(cabin);
-
-    const win = windows([[0.9 * scale, 0.75 * scale, 0, h * 0.6 + 0.4, (-d / 2) * 1.01, Math.PI]]);
-    win.position.copy(cabin.position);
-    win.rotation.y = ry;
-    group.add(win);
-  }
-
-  // le ponton : des planches sur pilotis, qui s'avancent dans l'eau
-  const deck: THREE.BufferGeometry[] = [];
-  const span = 26;
-  for (let i = 0; i < span / 0.34; i++) {
-    const t = i * 0.34;
-    deck.push(box(1.4, 0.06, 0.26, 0, 0, -t));
-  }
-  deck.push(box(0.12, 0.16, span, -0.58, -0.11, -span / 2 + 0.2));
-  deck.push(box(0.12, 0.16, span, 0.58, -0.11, -span / 2 + 0.2));
-  for (let i = 0; i < 6; i++) {
-    for (const sx of [-0.58, 0.58]) deck.push(box(0.15, 2.2, 0.15, sx, -1.2, -1 - i * 4.8));
-  }
-  const jetty = built(deck, 'ponton', 0.1);
-  // le ponton part droit devant le promeneur qui arrive, et s'avance sur l'eau
-  // le ponton part de la rive vers le large, et le promeneur s'arrête à sa racine
-  jetty.position.set(111, waterLevel + 1.0, -216);
-  jetty.rotation.y = -0.51;
-  group.add(jetty);
-
-  // pinasses échouées : coque effilée, fond plat
-  for (const [x, z, ry] of [
-    [86, -234, 0.8],
-    [98, -226, -0.3],
-    [110, -220, 1.4],
-  ] as [number, number, number][]) {
-    const hull = new THREE.CylinderGeometry(0.85, 0.55, 6.4, 6, 1);
-    hull.rotateZ(Math.PI / 2);
-    hull.scale(1, 0.55, 1);
-    const shaped = hull.toNonIndexed();
-    shaped.deleteAttribute('uv');
-    const p = shaped.attributes.position as THREE.BufferAttribute;
-    for (let i = 0; i < p.count; i++) {
-      // l'étrave et la poupe se pincent : c'est ce qui fait la pinasse
-      const t = Math.abs(p.getX(i)) / 3.2;
-      const k = 1 - t * t * 0.8;
-      p.setXYZ(i, p.getX(i), Math.max(p.getY(i) * k, -0.2), p.getZ(i) * k);
-    }
-    const boat = built([shaped, box(5.2, 0.1, 0.5, 0, 0.32, 0)], 'pinasse', 0.05);
-    boat.position.set(x, groundAt(x, z) + 0.25, z);
-    boat.rotation.set(0.06, ry, 0.12);
-    group.add(boat);
-  }
 
   return group;
 }

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { KEYS, setDaylight, state, world } from './light';
-import { BASSIN, LAKE, createTerrain, heightAt, paintBiomes } from './terrain';
+import { LAKE, createTerrain, heightAt, paintBiomes } from './terrain';
 import { CHOICES, FORK, FORK_AT, TIME_RATE, branchHeading, branchTarget } from './paths';
 import { createForest, createPots, paintGround, plantForest } from './forest';
 import { createGrass } from './grass';
@@ -14,7 +14,7 @@ import { SunShadow, type Caster } from './shadow';
 import { createCrasteBanks, createCrasteWater, createDeck } from './craste';
 import { createBasinWater, createCabane, createEstey, createEsteyWater, createPignots } from './bassin';
 import { createAlders, createDeltaBanks, createDeltaWater } from './delta';
-import { createAirial, createVillage } from './endings';
+import { createAirial } from './endings';
 import { Post } from './post';
 import { Walk } from './walk';
 
@@ -163,7 +163,6 @@ export class World {
     this.delta.add(createDeltaBanks((x, z) => heightAt(x, z)), createDeltaWater(), alders.mesh);
     this.delta.add(createAirial((x, z) => heightAt(x, z)));
     this.scene.add(this.delta);
-    this.basin.add(createVillage((x, z) => heightAt(x, z), BASSIN.level));
 
     progress(0.82, 'Oiseaux, aigrettes et pissenlits');
     await step();
