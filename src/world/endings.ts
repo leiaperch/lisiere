@@ -51,12 +51,20 @@ function gable(w: number, h: number, d: number, x: number, y: number, z: number)
   return g;
 }
 
+/**
+ * Le bâti.
+ *
+ * De nuit, une maison éclairée de l'intérieur seulement se réduit à ses carreaux : deux taches
+ * jaunes flottant dans le noir, sans maison autour. Il lui faut deux choses de plus — une toiture
+ * que la lune détache du rideau d'arbres, et la lumière de la lampe qui déborde sur la façade
+ * autour des fenêtres. C'est ce débord qui donne le volume.
+ */
 function built(parts: THREE.BufferGeometry[], name: string, tone: number) {
   const geo = mergeGeometries(parts)!;
   geo.deleteAttribute('uv');
   geo.computeVertexNormals();
   const mat = new THREE.ShaderMaterial({
-    uniforms: { ...world, uTone: { value: tone } },
+    uniforms: { ...world, uTone: { value: tone }, uHomeLamp: { value: new THREE.Vector4(0, -999, 0, 0) } },
     side: THREE.DoubleSide,
     vertexShader: /* glsl */ `
       varying vec3 vWorld;
@@ -73,6 +81,7 @@ function built(parts: THREE.BufferGeometry[], name: string, tone: number) {
       ${glslNoise}
       ${glslWorld}
       uniform float uTone;
+      uniform vec4 uHomeLamp; // xyz : la lampe derrière la fenêtre, w : son intensité
       varying vec3 vWorld;
       varying vec3 vNormal;
       varying vec3 vLocal;
@@ -82,14 +91,26 @@ function built(parts: THREE.BufferGeometry[], name: string, tone: number) {
         float grain = fbm(vec2(vWorld.x * 2.4 + vWorld.z * 1.7, vLocal.y * 5.5));
         // uTone : 0 bois gris des cabanes, 1 torchis clair de la maison landaise
         vec3 wood = mix(vec3(0.13, 0.12, 0.10), vec3(0.28, 0.25, 0.21), grain);
-        vec3 daub = mix(vec3(0.42, 0.39, 0.33), vec3(0.58, 0.55, 0.47), grain);
+        vec3 daub = mix(vec3(0.33, 0.31, 0.26), vec3(0.47, 0.44, 0.38), grain);
         vec3 albedo = mix(wood, daub, uTone);
-        // le toit, plus sombre, prend la lumière du ciel à plat
-        albedo *= mix(1.0, 0.55, smoothstep(0.55, 0.85, n.y));
+        // le toit, plus sombre que les murs, mais pas au point de disparaître : c'est lui qui
+        // porte la silhouette de la maison contre le ciel
+        albedo *= mix(1.0, 0.72, smoothstep(0.55, 0.85, n.y));
         float ndl = max(dot(n, uSunDir), 0.0);
         float shadow = sunShadow(vWorld, ndl);
         vec3 amb = mix(uSkyHorizon, uSkyTop, n.y * 0.5 + 0.5) * uAmbient;
         vec3 col = albedo * (uSunColor * ndl * shadow * 0.55 + amb + lantern(vWorld, n));
+        // la lune prend les pans de toit et les détache du noir des chênes
+        // elle tombe de haut : les pans de toit en prennent bien plus que les murs, faute de quoi la
+        // maison s'aplatit en une découpe de carton toute d'une pièce
+        col += albedo * mix(uSkyHorizon, vec3(0.55, 0.66, 0.95), 0.6) * max(dot(n, uMoonDir), 0.0)
+               * uMoon * 0.55 * (0.35 + 0.75 * max(n.y, 0.0));
+        // la lampe déborde par la fenêtre et lave le mur autour d'elle
+        vec3 toLamp = uHomeLamp.xyz - vWorld;
+        float dist = length(toLamp);
+        // elle ne s'allume qu'avec la nuit, comme les carreaux
+        float fall = uHomeLamp.w * (0.08 + 0.92 * uMoon) / (1.0 + dist * dist * 0.22);
+        col += albedo * vec3(1.0, 0.58, 0.24) * max(dot(n, toLamp / dist), 0.0) * fall * 2.6;
         gl_FragColor = vec4(applyFog(col, vWorld, cameraPosition), 1.0);
       }`,
   });
@@ -145,6 +166,9 @@ function windows(rects: [number, number, number, number, number, number][]) {
         float edge = (1.0 - smoothstep(0.55, 1.0, abs(vUv.x))) * (1.0 - smoothstep(0.55, 1.0, abs(vUv.y)));
         float glow = edge * edge;
         vec3 col = vec3(1.0, 0.68, 0.34) * lit * (0.35 + 0.9 * glow);
+        // le croisillon : une fenêtre sans montant est un rectangle lumineux, pas une fenêtre
+        float bar = (1.0 - smoothstep(0.03, 0.10, abs(vUv.x))) + (1.0 - smoothstep(0.02, 0.07, abs(vUv.y + 0.12)));
+        col *= 1.0 - 0.72 * min(bar, 1.0);
         // le halo s'atténue avec la distance comme le reste du paysage
         float d = length(vWorld - cameraPosition);
         col *= exp(-uFogDensity * d * 0.5);
@@ -245,20 +269,34 @@ export function createAirial(groundAt: (x: number, z: number) => number) {
   // appentis
   house.push(box(4.6, 2.4, 3.4, 8.6, 1.2, 1.4));
   house.push(gable(5.2, 1.4, 4, 8.6, 3.05, 1.4));
+  // la cheminée : c'est elle qui fait lire une maison plutôt qu'un hangar
+  house.push(box(1.15, 2.9, 1.15, -3.6, 5.2, 0));
+  house.push(box(1.45, 0.22, 1.45, -3.6, 6.72, 0));
   const maison = built(house, 'maison', 1);
   maison.position.set(AIRIAL.x, y, AIRIAL.z);
   maison.rotation.y = -0.35;
   group.add(maison);
 
   // façade tournée vers le sentier : les fenêtres éclairées doivent être celles qu'on voit
+  // Une fenêtre landaise est plus haute que large, et la porte est le point le plus lumineux :
+  // c'est par là qu'on entre. Les trois ouvertures regardent le sentier.
   const lights = windows([
-    [1.05, 0.9, -3.2, 1.85, -3.76, Math.PI],
-    [1.05, 0.9, 2.4, 1.85, -3.76, Math.PI],
-    [0.8, 0.75, 6.55, 1.55, -3.16, Math.PI],
+    [0.95, 1.35, -3.2, 2.05, -3.76, Math.PI],
+    [0.95, 1.35, 2.4, 2.05, -3.76, Math.PI],
+    [1.05, 2.05, -0.5, 1.15, -3.76, Math.PI],
   ]);
   lights.position.copy(maison.position);
   lights.rotation.y = maison.rotation.y;
   group.add(lights);
+
+  // la lampe est derrière la porte : on donne sa position au shader des murs, qui s'en sert pour
+  // éclairer la façade autour des ouvertures
+  // Elle est posée devant la façade, pas derrière : une source placée à l'intérieur du mur éclaire
+  // sa face cachée, et le mur que l'on voit reste noir. C'est la lumière sortie par la porte qu'on
+  // simule ici, pas l'ampoule.
+  const lamp = new THREE.Vector3(-0.5, 1.5, -4.5).applyAxisAngle(new THREE.Vector3(0, 1, 0), maison.rotation.y).add(maison.position);
+  (maison.material as THREE.ShaderMaterial).uniforms.uHomeLamp.value.set(lamp.x, lamp.y, lamp.z, 1);
+  group.userData.lamp = lamp;
 
   // bergerie, à l'écart
   const shed = built([box(7, 2.6, 4.6, 0, 1.3, 0), gable(8, 1.8, 5.4, 0, 3.4, 0)], 'bergerie', 0.55);

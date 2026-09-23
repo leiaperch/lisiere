@@ -1,11 +1,18 @@
 // Ambiance sonore synthétisée en direct (Web Audio), sans aucun fichier :
 // vent dans les feuilles, oiseaux au coucher du soleil, grillons à l'heure bleue,
 // chouette et clapotis au bord du lac. Chaque couche suit l'avancée de la balade.
+//
+// Par-dessous court une musique, synthétisée elle aussi. Elle n'a ni mesure ni boucle : une pédale
+// de ré et de la, tenue du début à la fin, et des notes isolées prises dans la pentatonique de ré
+// mineur, espacées de plusieurs secondes. Aucune de ces notes ne peut jurer avec les autres, ce
+// qui permet de les tirer au sort sans jamais tomber sur une fausse note — et l'absence de pulsion
+// fait qu'on ne l'attend pas, ce qui est exactement ce qu'on demande à une musique de fond.
 
 export class Ambience {
   private ctx?: AudioContext;
   private master!: GainNode;
-  private layers: Record<'wind' | 'birds' | 'crickets' | 'night' | 'water', GainNode> = {} as never;
+  private layers: Record<'wind' | 'birds' | 'crickets' | 'night' | 'water' | 'music', GainNode> = {} as never;
+  private padFilter!: BiquadFilterNode;
   private windFilter!: BiquadFilterNode;
   private waterFilter!: BiquadFilterNode;
   private lapDepth!: GainNode;
@@ -38,6 +45,11 @@ export class Ambience {
     set(this.layers.crickets, ramp(t, 0.5, 0.75));
     set(this.layers.night, ramp(t, 0.78, 0.95));
     set(this.layers.water, ramp(t, this.branch === 'cote' ? 0.6 : 0.82, 1));
+    // la musique entre après les premiers pas, se retire un peu quand les grillons prennent le
+    // dessus, et revient pour l'arrivée
+    set(this.layers.music, ramp(t, 0.04, 0.2) * 0.55 - ramp(t, 0.45, 0.7) * 0.2 + ramp(t, 0.86, 1) * 0.3);
+    // la pédale s'assombrit à mesure que le jour tombe
+    this.padFilter.frequency.setTargetAtTime(900 - t * 480, now, 3);
     this.windFilter.frequency.setTargetAtTime(420 + (1 - t) * 380, now, 1);
   }
 
@@ -67,6 +79,7 @@ export class Ambience {
     bus('crickets', 0.9);
     bus('night', 0.6);
     bus('water', 0.9);
+    bus('music', 0.75);
 
     // vent : bruit rose filtré, dont l'intensité ondule lentement
     const noise = ctx.createBufferSource();
@@ -104,6 +117,10 @@ export class Ambience {
     water.connect(wf).connect(lap).connect(this.layers.water);
     water.start();
     lapLfo.start();
+
+    this.pad();
+    // une note toutes les cinq à onze secondes : assez rare pour qu'on ne la guette pas
+    this.every(() => this.note(), 5000, 11000);
 
     // événements ponctuels : chants d'oiseaux, trilles de grillons, chouette
     this.every(() => this.bird(), 900, 2600);
@@ -153,6 +170,75 @@ export class Ambience {
       o.connect(f).connect(g).connect(this.layers.night);
       o.start(at);
       o.stop(at + 0.14);
+    }
+  }
+
+  /**
+   * La pédale : ré et la tenus, à trois hauteurs, chaque voix légèrement désaccordée des autres.
+   * C'est ce désaccord de quelques centièmes de ton qui fait battre le son lentement, et qui
+   * l'empêche de ressembler à une sirène.
+   */
+  private pad() {
+    const ctx = this.ctx!;
+    this.padFilter = ctx.createBiquadFilter();
+    this.padFilter.type = 'lowpass';
+    this.padFilter.frequency.value = 900;
+    this.padFilter.Q.value = 0.6;
+    this.padFilter.connect(this.layers.music);
+    for (const [freq, detune, level] of [
+      [73.42, -6, 0.5],  // ré1
+      [110.0, 4, 0.34],  // la1
+      [146.83, -3, 0.26], // ré2
+      [220.0, 7, 0.12],  // la2
+    ] as [number, number, number][]) {
+      const o = ctx.createOscillator();
+      o.type = 'triangle';
+      o.frequency.value = freq;
+      o.detune.value = detune;
+      const g = ctx.createGain();
+      g.gain.value = level * 0.14;
+      // une respiration très lente, propre à chaque voix : rien ne reste jamais tout à fait fixe
+      const lfo = ctx.createOscillator();
+      lfo.frequency.value = 0.03 + Math.random() * 0.05;
+      const amt = ctx.createGain();
+      amt.gain.value = level * 0.05;
+      lfo.connect(amt).connect(g.gain);
+      o.connect(g).connect(this.padFilter);
+      o.start();
+      lfo.start();
+    }
+  }
+
+  /** une note isolée, prise dans la pentatonique : cloche douce, longue à mourir */
+  private note() {
+    const ctx = this.ctx;
+    if (!ctx || this.t < 0.05) return;
+    // ré mineur pentatonique sur deux octaves et demie
+    const scale = [146.83, 174.61, 196.0, 220.0, 261.63, 293.66, 349.23, 392.0, 440.0, 523.25];
+    // le registre descend avec le jour : clair au départ, grave une fois la nuit tombée
+    const top = Math.round(scale.length - 1 - this.t * 4);
+    const f = scale[Math.max(0, Math.floor(Math.random() * (top + 1)))];
+    const now = ctx.currentTime;
+    const dur = 3.4 + Math.random() * 2.6;
+    const pan = ctx.createStereoPanner();
+    pan.pan.value = Math.random() * 1.2 - 0.6;
+    pan.connect(this.layers.music);
+    // fondamentale et octave : l'octave, brève, fait l'attaque de la cloche
+    for (const [mult, level, decay] of [
+      [1, 0.075, 1],
+      [2, 0.03, 0.45],
+      [3, 0.012, 0.25],
+    ] as [number, number, number][]) {
+      const o = ctx.createOscillator();
+      o.type = 'sine';
+      o.frequency.value = f * mult;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.exponentialRampToValueAtTime(level, now + 0.06);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + dur * decay);
+      o.connect(g).connect(pan);
+      o.start(now);
+      o.stop(now + dur + 0.1);
     }
   }
 
