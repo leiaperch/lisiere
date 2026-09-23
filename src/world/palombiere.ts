@@ -43,10 +43,11 @@ function box(w: number, h: number, d: number, x: number, y: number, z: number) {
   return g.toNonIndexed();
 }
 
-function beam(len: number, r: number, from: THREE.Vector3, to: THREE.Vector3) {
-  const g = new THREE.CylinderGeometry(r, r * 1.15, len, 6, 1);
-  g.deleteAttribute('uv');
+/** un rondin tendu d'un point à l'autre : sa longueur est celle du segment, pas une donnée */
+function beam(r: number, from: THREE.Vector3, to: THREE.Vector3) {
   const dir = to.clone().sub(from);
+  const g = new THREE.CylinderGeometry(r, r * 1.15, dir.length(), 6, 1);
+  g.deleteAttribute('uv');
   const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
   g.applyQuaternion(q);
   g.translate(from.x + dir.x / 2, from.y + dir.y / 2, from.z + dir.z / 2);
@@ -73,14 +74,14 @@ function timber(drop: number) {
   ]) {
     const top = new THREE.Vector3(sx * (W - 0.18), F, sz * (D - 0.18));
     const foot = new THREE.Vector3(sx * (W + 0.5), -drop, sz * (D + 0.4));
-    parts.push(beam(1, 0.115, foot, top));
+    parts.push(beam(0.115, foot, top));
   }
   // contreventement : deux croix de Saint-André entre les poteaux, côté sentier et côté opposé
   for (const sz of [-1, 1]) {
     const a = new THREE.Vector3(-(W - 0.1), F - 0.4, sz * (D - 0.1));
     const b = new THREE.Vector3(W - 0.1, F - 2.6, sz * (D + 0.05));
-    parts.push(beam(1, 0.05, a, b));
-    parts.push(beam(1, 0.05, new THREE.Vector3(b.x, a.y, b.z), new THREE.Vector3(a.x, b.y, a.z)));
+    parts.push(beam(0.05, a, b));
+    parts.push(beam(0.05, new THREE.Vector3(b.x, a.y, b.z), new THREE.Vector3(a.x, b.y, a.z)));
   }
 
   // le plancher : des planches jointives, chacune un peu gauchie
@@ -116,7 +117,7 @@ function timber(drop: number) {
   const lx = W + 0.34;
   const lz = 0.55;
   for (const off of [-0.22, 0.22]) {
-    parts.push(beam(1, 0.05, new THREE.Vector3(lx + 0.45, -drop, lz + off), new THREE.Vector3(lx - 0.04, F + 0.1, lz + off)));
+    parts.push(beam(0.05, new THREE.Vector3(lx + 0.45, -drop, lz + off), new THREE.Vector3(lx - 0.04, F + 0.1, lz + off)));
   }
   const rungs = Math.floor(F / 0.42);
   for (let i = 1; i <= rungs; i++) {
@@ -127,7 +128,7 @@ function timber(drop: number) {
   // la perche à appelants : elle sort de la cabane côté sentier et porte les perchoirs
   const armY = PALOMBIERE.floor + WALL + 0.9;
   const tip = new THREE.Vector3(-(W + 4.2), armY + 0.5, -0.4);
-  parts.push(beam(1, 0.07, new THREE.Vector3(-(W - 0.2), armY - 0.6, 0.1), tip));
+  parts.push(beam(0.07, new THREE.Vector3(-(W - 0.2), armY - 0.6, 0.1), tip));
   for (const [t, len] of [
     [0.45, 0.9],
     [0.72, 0.75],

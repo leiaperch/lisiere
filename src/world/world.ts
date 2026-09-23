@@ -259,8 +259,13 @@ export class World {
     // chaque branche a son air : épais et chargé d'humidité au marais, lavé par le large sur la côte
     const advance = THREE.MathUtils.smoothstep(t, FORK_AT, FORK_AT + 0.28);
     this.coast = this.walk.branch === 'cote' ? advance : 0;
+    world.uMist.value = 0;
     if (this.walk.branch === 'marais') {
       world.uFogDensity.value *= 1 + advance * 0.6;
+      // Elle se lève à mesure que l'on s'enfonce dans la tourbière, et surtout à mesure que le
+      // soleil descend : c'est le refroidissement du soir qui la fait sortir. Elle plafonne, en
+      // revanche — une nappe qui continuerait d'épaissir toute la nuit finirait par tout effacer.
+      world.uMist.value = advance * 0.85 * THREE.MathUtils.clamp(1 - state.sunElevation / 9, 0, 1);
       // la tourbe est à découvert et l'eau renvoie le ciel : il y fait moins noir que sous les arbres
       world.uAmbient.value *= 1 + advance * 0.3;
     }

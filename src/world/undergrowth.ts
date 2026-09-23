@@ -9,7 +9,7 @@ import { glslNoise, glslWorld, world } from './light';
 // Le sous-bois : fougères, buissons, souches, troncs couchés et rochers. Cinq familles semées
 // selon des règles (densité de forêt, distance au sentier), chacune dessinée en une instance.
 
-export type Kind = 'fern' | 'bush' | 'stump' | 'log' | 'rock' | 'reed' | 'oyat' | 'molinie' | 'linaigrette' | 'salicorne';
+export type Kind = 'fern' | 'bush' | 'stump' | 'log' | 'rock' | 'reed' | 'oyat' | 'molinie' | 'linaigrette' | 'salicorne' | 'bruyere';
 
 interface Piece {
   x: number;
@@ -134,9 +134,18 @@ function oyat() {
 }
 
 function molinie() {
+  // Le touradon. La molinie ne pousse pas à plat : ses feuilles mortes s'accumulent année après
+  // année et la touffe finit juchée sur une motte de vieilles souches, haute parfois d'un demi-
+  // mètre. C'est ce qui rend la lande humide si pénible à traverser — et ce qui lui donne son
+  // relief, que des touffes posées au sol n'avaient pas.
   // la molinie, l'auguicha des Landes : une grosse touffe dense, aux feuilles retombantes,
   // qui marque la lande humide bien plus que les roseaux
   const parts: THREE.BufferGeometry[] = [];
+  const mound = new THREE.IcosahedronGeometry(0.34, 1);
+  jitter(mound, 0.07);
+  mound.scale(1, 0.62, 1);
+  mound.translate(0, 0.1, 0);
+  parts.push(mound);
   for (let i = 0; i < 16; i++) {
     const h = 0.45 + rand() * 0.45;
     const blade = new THREE.PlaneGeometry(0.05, h, 1, 4);
@@ -147,7 +156,7 @@ function molinie() {
       pos.setZ(k, pos.getZ(k) + t * t * 0.28);
       pos.setY(k, pos.getY(k) - t * t * 0.1);
     }
-    blade.translate(0, h / 2, 0);
+    blade.translate(0, h / 2 + 0.22, 0);
     blade.rotateZ((rand() - 0.5) * 0.3);
     blade.rotateY(rand() * Math.PI * 2);
     blade.translate((rand() - 0.5) * 0.16, 0, (rand() - 0.5) * 0.16);
@@ -173,6 +182,27 @@ function linaigrette() {
     tuft.rotateY(rand() * Math.PI * 2);
     tuft.translate((rand() - 0.5) * 0.3, 0, (rand() - 0.5) * 0.3);
     parts.push(tuft);
+  }
+  return parts;
+}
+
+function bruyere() {
+  // La bruyère à quatre angles et la callune : des sous-arbrisseaux bas, très ramifiés, qui
+  // fleurissent rose jusqu'en septembre. Dans une lande où tout est fauve, c'est la seule couleur.
+  const parts: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < 20; i++) {
+    const h = 0.13 + rand() * 0.16;
+    const stem = new THREE.CylinderGeometry(0.006, 0.011, h, 3, 1);
+    stem.translate(0, h / 2, 0);
+    // des clochettes, pas des grappes : à 3,5 cm elles se lisaient comme des grains de raisin
+    const bell = new THREE.IcosahedronGeometry(0.018 + rand() * 0.012, 0);
+    bell.scale(0.8, 1.4, 0.8);
+    bell.translate(0, h + 0.02, 0);
+    const sprig = mergeGeometries([stem.toNonIndexed(), bell.toNonIndexed()])!;
+    sprig.rotateZ((rand() - 0.5) * 0.7);
+    sprig.rotateY(rand() * Math.PI * 2);
+    sprig.translate((rand() - 0.5) * 0.34, 0, (rand() - 0.5) * 0.34);
+    parts.push(sprig);
   }
   return parts;
 }
@@ -226,6 +256,7 @@ const RULES: Record<Kind, { count: number; near: [number, number]; forest: numbe
   reed: { count: 900, near: [1.1, 24], forest: 0, scale: [0.7, 1.6], clearing: true, biomes: ['marais', 'delta'] },
   oyat: { count: 1500, near: [1.0, 42], forest: 0, scale: [0.7, 1.6], clearing: true, biomes: ['dune'] },
   salicorne: { count: 1400, near: [1.0, 34], forest: 0, scale: [0.45, 0.9], clearing: true, biomes: ['bassin'] },
+  bruyere: { count: 1600, near: [1.0, 34], forest: 0, scale: [0.6, 1.2], clearing: true, biomes: ['marais', 'delta'] },
   molinie: { count: 1400, near: [1.0, 40], forest: 0, scale: [0.8, 1.7], clearing: true, biomes: ['marais', 'delta'] },
   linaigrette: { count: 900, near: [1.2, 30], forest: 0, scale: [0.8, 1.2], clearing: true, biomes: ['marais'] },
 };
@@ -267,6 +298,7 @@ const PALETTES: Record<Kind, [string, string]> = {
   molinie: ['#3b3a1c', '#7a6a33'],
   salicorne: ['#2b3327', '#6b5240'],
   linaigrette: ['#33401f', '#efe9dc'],
+  bruyere: ['#2a2a1a', '#8b6076'],
 };
 
 const vertex = /* glsl */ `
@@ -339,6 +371,7 @@ export function createUndergrowth() {
     molinie: build(molinie()),
     salicorne: build(salicorne()),
     linaigrette: build(linaigrette()),
+    bruyere: build(bruyere()),
   };
   const dummy = new THREE.Object3D();
   const counts: Record<string, number> = {};
@@ -353,7 +386,7 @@ export function createUndergrowth() {
         uDark: { value: new THREE.Color(PALETTES[kind][0]) },
         uLight: { value: new THREE.Color(PALETTES[kind][1]) },
         uSway: { value: kind === 'reed' ? 1.8 : kind === 'oyat' || kind === 'linaigrette' ? 1.4 : kind === 'molinie' ? 1.1 : kind === 'fern' || kind === 'bush' ? 1 : 0 },
-        uTipped: { value: kind === 'linaigrette' ? 1 : 0 },
+        uTipped: { value: kind === 'linaigrette' ? 1 : kind === 'bruyere' ? 0.7 : 0 },
         uLeafy: { value: kind === 'fern' || kind === 'reed' ? 1 : kind === 'bush' ? 0.6 : kind === 'oyat' || kind === 'molinie' ? 0.9 : kind === 'linaigrette' ? 1.6 : 0 },
       },
       vertexShader: vertex,

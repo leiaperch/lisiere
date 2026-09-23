@@ -40,6 +40,8 @@ export const world = {
   uSkyHorizon: { value: new THREE.Color() },
   uFogColor: { value: new THREE.Color() },
   uFogDensity: { value: 0.015 },
+  /** nappe de brume au ras du sol : elle ne se lève que sur la tourbière */
+  uMist: { value: 0 },
   uAmbient: { value: 0.5 },
   uMoonDir: { value: new THREE.Vector3(0.35, 0.25, -1).normalize() },
   uMoon: { value: 0 },
@@ -141,6 +143,7 @@ uniform vec3 uSkyTop;
 uniform vec3 uSkyHorizon;
 uniform vec3 uFogColor;
 uniform float uFogDensity;
+uniform float uMist;
 uniform float uAmbient;
 uniform vec3 uMoonDir;
 uniform float uMoon;
@@ -173,7 +176,24 @@ vec3 applyFog(vec3 col, vec3 worldPos, vec3 camPos){
   float amount = 1.0 - exp(-dist * uFogDensity * (0.35 + heightFalloff * 1.2));
   float forward = pow(max(dot(dir, uSunDir), 0.0), 10.0);
   vec3 fogCol = uFogColor + uSunColor * (forward * 0.55 + pow(max(dot(dir, uSunDir), 0.0), 60.0) * 0.8);
-  return mix(col, fogCol, clamp(amount, 0.0, 1.0));
+  col = mix(col, fogCol, clamp(amount, 0.0, 1.0));
+  // La brume de tourbière. Au-dessus d'une terre gorgée d'eau qui a chauffé tout le jour, elle se
+  // dépose en fin de journée en une nappe basse, qui noie les troncs par le pied et laisse le ciel
+  // parfaitement clair. On l'intègre le long du rayon en prenant la hauteur moyenne de ses deux
+  // extrémités : c'est faux dès qu'on regarde à la verticale, mais on regarde droit devant.
+  if (uMist > 0.001) {
+    float mid = (worldPos.y + camPos.y) * 0.5;
+    float band = 1.0 - smoothstep(-0.6, 2.8, mid);
+    // elle traîne par bancs, et dérive lentement. « patch » est un mot réservé du GLSL :
+    // l'employer ici faisait échouer la compilation de tous les shaders d'un coup
+    float banc = 0.5 + 0.6 * fbm(worldPos.xz * 0.05 + vec2(uTime * 0.012, uTime * 0.008));
+    float m = 1.0 - exp(-dist * 0.03 * uMist * band * banc);
+    // la nappe emprunte sa couleur au ciel bas, pas au brouillard seul : une brume qui prend la
+    // teinte du brouillard de nuit aplatit tout en un gris noir, alors qu'une vraie nappe reste
+    // la chose la plus claire du paysage, même après le coucher
+    col = mix(col, mix(fogCol, uSkyHorizon, 0.3) * 1.05, clamp(m, 0.0, 0.8));
+  }
+  return col;
 }
 
 // Ombres longues des arbres, peintes une fois sur une texture vue du ciel
