@@ -3,6 +3,7 @@ import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferG
 import { CLEARING, DUNE, LAKE, MARSH, coastMask, fbm, heightAt } from './terrain';
 import { type BiomeId, biomeAt, trailDistance } from './paths';
 import { CRASTE, crasteDistance } from './craste';
+import { underPalombiere } from './palombiere';
 import { glslNoise, glslWorld, world } from './light';
 
 // Le sous-bois : fougères, buissons, souches, troncs couchés et rochers. Cinq familles semées
@@ -240,6 +241,7 @@ function sow(kind: Kind): Piece[] {
     if (Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.radius * 1.05) continue;
     if (Math.hypot(x - MARSH.x, z - MARSH.z) < MARSH.radius * 0.92) continue;
     if (crasteDistance(x, z) < CRASTE.bank + 0.6) continue;
+    if (underPalombiere(x, z)) continue;
     const inClearing = Math.hypot(x - CLEARING.x, z - CLEARING.z) < CLEARING.radius;
     if (inClearing && !rule.clearing) continue;
     if (!rule.biomes.includes(biomeAt(x, z))) continue;

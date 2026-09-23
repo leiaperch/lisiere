@@ -4,6 +4,7 @@ import { CLEARING, DUNE, LAKE, MARSH, coastMask, fbm, heightAt } from './terrain
 import { AIRIAL } from './endings';
 import { biomeAt, trailDistance } from './paths';
 import { CRASTE, crasteDistance } from './craste';
+import { PALOMBIERE, blocksPalombiere, underPalombiere } from './palombiere';
 import { glslNoise, glslWorld, world } from './light';
 
 // La forêt : quelques milliers d'arbres en deux familles, placés une fois selon des règles
@@ -43,6 +44,7 @@ export function plantForest(): Tree[] {
     if (dl < LAKE.radius * 1.1) continue;
     if (dm < MARSH.radius * 1.1) continue;
     if (crasteDistance(x, z) < CRASTE.bank + 2) continue;
+    if (underPalombiere(x, z) || blocksPalombiere(x, z)) continue;
 
     const biome = biomeAt(x, z);
     // ni dans les rangs de vigne, ni sur le schorre : ces terres-là n'ont pas d'arbres
@@ -78,7 +80,28 @@ export function plantForest(): Tree[] {
     const gem = (kind === 0 || kind === 3) && biome !== 'marais' && dTrail < 34 && rand() < 0.62 ? 1 : 0;
     trees.push({ x, y: heightAt(x, z, dTrail), z, scale: (0.75 + rand() * 0.7) * small, kind, hue: rand(), gem });
   }
+  plantGrove(trees);
   return trees;
+}
+
+/**
+ * Le bosquet de la palombière.
+ *
+ * Une palombière se bâtit dans un bouquet de pins assez haut pour la cacher. Ici, la lande a
+ * repris la main et les arbres sont clairsemés : on plante donc la vingtaine de pins qui portent
+ * la cabane, en couronne autour d'elle, sans quoi elle se dresserait seule au milieu du vide.
+ */
+function plantGrove(trees: Tree[]) {
+  for (let i = 0; i < 22; i++) {
+    const a = (i / 22) * Math.PI * 2 + rand() * 0.24;
+    const r = 7.8 + rand() * 9;
+    const x = PALOMBIERE.x + Math.cos(a) * r;
+    const z = PALOMBIERE.z + Math.sin(a) * r;
+    const dTrail = trailDistance(x, z);
+    if (dTrail < 4.5 || crasteDistance(x, z) < CRASTE.bank + 2) continue;
+    if (blocksPalombiere(x, z)) continue;
+    trees.push({ x, y: heightAt(x, z, dTrail), z, scale: 0.95 + rand() * 0.45, kind: 3, hue: rand(), gem: rand() < 0.5 ? 1 : 0 });
+  }
 }
 
 // ───────────── géométries ─────────────

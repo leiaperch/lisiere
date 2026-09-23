@@ -15,6 +15,7 @@ import { createCrasteBanks, createCrasteWater, createDeck } from './craste';
 import { createBasinWater, createCabane, createEstey, createEsteyWater, createPignots } from './bassin';
 import { createAlders, createDeltaBanks, createDeltaWater } from './delta';
 import { createAirial } from './endings';
+import { createPalombiere } from './palombiere';
 import { Post } from './post';
 import { Walk } from './walk';
 
@@ -109,6 +110,7 @@ export class World {
     this.stats.trees = trees.length;
     const forestGroup = createForest(trees);
     this.scene.add(forestGroup);
+    this.scene.add(createPalombiere((x, z) => heightAt(x, z)));
     const pots = createPots(trees);
     this.stats.pots = pots.count;
     this.scene.add(pots.mesh);

@@ -56,6 +56,8 @@ const GAZE: Record<string, Gaze[]> = {
   ],
   marais: [
     { at: 0.0, yaw: -0.05, pitch: 0.0, eye: 1.65 },
+    { at: 0.12, yaw: -0.14, pitch: 0.24, eye: 1.7 }, // la palombière, dans les pins sur la gauche
+    { at: 0.22, yaw: -0.12, pitch: 0.16, eye: 1.68 },
     { at: 0.35, yaw: 0.22, pitch: -0.16, eye: 1.55 }, // on surveille où l'on met les pieds
     { at: 0.72, yaw: -0.28, pitch: 0.04, eye: 1.6 },
     { at: 1.0, yaw: -0.06, pitch: 0.04, eye: 2.2 }, // la rive de l'étang
