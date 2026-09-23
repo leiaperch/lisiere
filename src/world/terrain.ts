@@ -112,6 +112,14 @@ export function heightAt(x: number, z: number, dTrail = trailDistance(x, z)) {
     h = THREE.MathUtils.lerp(h, flood, Math.min(delta * 1.15, 1));
   }
 
+  // La passe : entre la plage et le schorre, il restait une table de terre plate juste au-dessus
+  // de l'eau, qui se lisait comme une dalle posée sur la lagune. C'est justement là que l'océan
+  // communique avec le bassin — on ouvre donc le chenal, et l'eau la recouvre.
+  const pass =
+    (1 - THREE.MathUtils.smoothstep(Math.abs(x - 32), 12, 36)) *
+    (1 - THREE.MathUtils.smoothstep(Math.abs(z + 268), 14, 40));
+  if (pass > 0.001) h = THREE.MathUtils.lerp(h, SEA.level - 1.8, pass);
+
   // les bras du delta : mêmes lits dessinés à part, le terrain leur fait de la place
   const dd = deltaDistance(x, z);
   if (dd < DELTA_REACH) {

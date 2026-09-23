@@ -54,22 +54,28 @@ const APPROACH: [number, number][] = [
 ];
 
 // vers l'océan : le sentier part sur la gauche, puis monte sur la dune face au couchant
+// Le virage vers le bassin commence avant la crête : deux courbes qui se rejoignent ont chacune
+// leur tangente, et si elles ne pointent pas dans la même direction au raccord, le cap saute d'un
+// coup. Les derniers points amorcent donc déjà le mouvement que la branche suivante poursuit.
 const TO_COAST: [number, number][] = [
   [0, -94],
   [-6, -118],
   [-17, -140],
   [-23, -163],
-  [-27, -183],
-  [-29, -201],
+  [-28, -182],
+  [-29, -196],
+  [-27, -206],
 ];
 
 // puis on bascule de l'autre côté de la flèche de sable, vers les eaux calmes du bassin
 const TO_BASIN: [number, number][] = [
-  [-29, -201],
-  [-12, -212],
-  [12, -218],
-  [36, -223],
-  [58, -230],
+  [-27, -206],
+  [-24, -215],
+  [-17, -221],
+  [-4, -224],
+  [14, -224],
+  [36, -227],
+  [58, -232],
   [78, -239],
 ];
 

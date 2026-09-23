@@ -82,6 +82,8 @@ export class Walk {
   private dir = new THREE.Vector3();
   private reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   private stride = 0;
+  private heading = 0; // cap amorti, en radians
+  private headingReady = false;
   private scrollU = 0; // dernier défilement brut, avant recalage
   private mapFrom = 0; // défilement au moment du choix
   private mapTo = 0; // avancement au même instant
@@ -175,7 +177,19 @@ export class Walk {
     this.dir.y = 0;
     if (this.dir.lengthSq() < 1e-6) this.dir.copy(this.here.tangent).setY(0);
     this.dir.normalize();
-    const yaw = Math.atan2(-this.dir.x, -this.dir.z) + this.yaw + this.look.x;
+    // Le cap suit le sentier avec un peu de retard. Sans cet amorti, tout changement de direction
+    // un peu vif — un raccord entre deux courbes, un virage court — fait pivoter la tête d'un bloc.
+    const target = Math.atan2(-this.dir.x, -this.dir.z);
+    if (!this.headingReady) {
+      this.heading = target;
+      this.headingReady = true;
+    } else {
+      let delta = target - this.heading;
+      while (delta > Math.PI) delta -= Math.PI * 2;
+      while (delta < -Math.PI) delta += Math.PI * 2;
+      this.heading += delta * (this.reduced ? 1 : 1 - Math.exp(-dt * 1.7));
+    }
+    const yaw = this.heading + this.yaw + this.look.x;
     const pitch = this.pitch + this.look.y;
     this.camera.rotation.set(pitch, yaw, Math.sin(this.stride * 0.5) * bob * 0.05, 'YXZ');
     return Math.abs(goal - this.current) > 1e-3 || speed > 1e-3;

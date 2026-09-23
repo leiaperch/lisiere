@@ -41,7 +41,7 @@ export function createSky() {
         gl_FragColor = vec4(col, 1.0);
       }`,
   });
-  const sky = new THREE.Mesh(new THREE.SphereGeometry(500, 48, 24), mat);
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(800, 48, 24), mat);
   sky.renderOrder = -10;
   sky.frustumCulled = false;
   return sky;
@@ -244,7 +244,8 @@ export function createMarshWater() {
 // Une seule nappe, sans reflet calculé : la houle vient de la gauche, l'écume marque la laisse de
 // mer, et le couchant trace son chemin de lumière jusqu'au rivage.
 export function createOcean() {
-  const geo = new THREE.PlaneGeometry(1400, 800, 1, 1);
+  // la nappe déborde largement derrière la dune : sinon on aperçoit son bord depuis la descente
+  const geo = new THREE.PlaneGeometry(1400, 1000, 1, 1);
   geo.rotateX(-Math.PI / 2);
   const mat = new THREE.ShaderMaterial({
     uniforms: { ...world },
@@ -299,7 +300,7 @@ export function createOcean() {
       }`,
   });
   const mesh = new THREE.Mesh(geo, mat);
-  mesh.position.set(0, SEA.level, SEA.shore - 380);
+  mesh.position.set(0, SEA.level, SEA.shore - 420);
   mesh.name = 'ocean';
   mesh.renderOrder = -1;
   return mesh;

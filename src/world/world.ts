@@ -30,6 +30,7 @@ export class World {
   readonly walk: Walk;
   readonly post: Post;
   readonly stats = { frames: 0, triangles: 0, calls: 0, trees: 0, blades: 0, undergrowth: 0, vines: 0, alders: 0, pots: 0 };
+  private sky!: THREE.Object3D;
   private fireflies!: THREE.Points;
   private lake!: Lake;
   private birds!: Birds;
@@ -137,7 +138,8 @@ export class World {
 
     progress(0.75, 'Ciel, eaux et lucioles');
     await step();
-    this.scene.add(createSky());
+    this.sky = createSky();
+    this.scene.add(this.sky);
     this.fireflies = createFireflies();
     this.scene.add(this.fireflies);
     this.lake = createLake(this.dpr);
@@ -245,6 +247,9 @@ export class World {
     if (document.hidden) return;
 
     this.walk.update(dt);
+    // le ciel suit le promeneur : posé à l'origine du monde, on voyait le bord de sa sphère dès
+    // qu'on s'en éloignait de deux cents mètres
+    this.sky.position.copy(this.camera.position);
     const t = this.walk.progress;
     setDaylight(this.daylightAt(t));
     // chaque branche a son air : épais et chargé d'humidité au marais, lavé par le large sur la côte
