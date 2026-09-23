@@ -70,7 +70,9 @@ export class World {
   onFrame?: (t: number) => void;
 
   constructor(private host: HTMLElement) {
-    this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+    // ?shot : garde le tampon de dessin lisible après coup, le temps d'une capture de contrôle.
+    // Hors de ce cas, on laisse le navigateur le vider — c'est lui qui rend le rendu rapide.
+    this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', preserveDrawingBuffer: location.search.includes('shot') });
     this.renderer.setPixelRatio(this.dpr);
     host.appendChild(this.renderer.domElement);
     this.post = new Post(this.renderer);

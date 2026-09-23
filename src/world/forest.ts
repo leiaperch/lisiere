@@ -269,14 +269,23 @@ const fragment = /* glsl */ `
       albedo = mix(vec3(0.12, 0.08, 0.06), vec3(0.24, 0.17, 0.11), bark);
       // La care : une bande d'écorce enlevée, montant du pied vers la cime, entaillée de
       // chevrons obliques. C'est le bois nu qui apparaît, bien plus clair que l'écorce.
+      // Bornée en largeur et en hauteur séparément, la care dessinait un rectangle : deux bords
+      // verticaux, deux bords horizontaux, des angles droits. On la mesure donc d'un seul tenant,
+      // comme la distance au centre d'une ellipse — la balafre s'affine vers le haut et vers le
+      // bas, comme une care vraie, et n'a plus de coin. Sa hauteur suit celle de l'arbre plutôt
+      // qu'une cote fixe, sans quoi elle déborde du fût sur les petits sujets.
       float face = cos(angle - vGem.y * 6.28);
-      float band = smoothstep(0.82, 0.95, face) * vGem.x;
-      band *= smoothstep(0.35, 0.8, vLocal.y) * (1.0 - smoothstep(3.4, 4.6, vLocal.y));
-      vec3 wood = mix(vec3(0.70, 0.57, 0.38), vec3(0.90, 0.78, 0.56), bark);
+      float along = (vHeight - 0.02) / 0.24; // du pied jusqu'à hauteur d'homme
+      // la care est étroite — un cinquième du tour, pas la moitié — et se rétrécit en montant,
+      // comme une balafre ouverte au hapchot année après année
+      float across = (1.0 - face) / (0.046 * (1.0 - along * 0.45));
+      float d = length(vec2(across, (along - 0.5) * 2.2));
+      float band = (1.0 - smoothstep(0.72, 1.0, d)) * vGem.x;
+      vec3 wood = mix(vec3(0.34, 0.26, 0.16), vec3(0.52, 0.41, 0.27), bark);
       // les coups de hapchot laissent des traits en travers, tous les quelques centimètres
       // les entailles sont espacées d'une main, pas d'un centimètre : à 26 par mètre, la care
       // se lisait comme une fermeture éclair
-      float cuts = smoothstep(0.62, 0.95, abs(sin(vLocal.y * 8.5 + angle * 1.2)));
+      float cuts = smoothstep(0.55, 0.98, abs(sin(vLocal.y * 8.5 + angle * 1.2)));
       albedo = mix(albedo, mix(wood, wood * 0.72, cuts), band);
       care = band;
     } else {
@@ -299,7 +308,7 @@ const fragment = /* glsl */ `
     vec3 col = albedo * (sun + amb + lantern(vWorld, n)) + rim * albedo * 2.0;
     // le bois vif est lisse et pâle : il accroche la lumière du ciel que l'écorce absorbe, et
     // c'est ce qui le fait ressortir même quand le tronc est à contre-jour
-    col += mix(uSkyHorizon, uSkyTop, 0.5) * uAmbient * care * 0.7 * albedo;
+    col += mix(uSkyHorizon, uSkyTop, 0.5) * uAmbient * care * 0.35 * albedo;
     col = applyFog(col, vWorld, cameraPosition);
     gl_FragColor = vec4(col, 1.0);
   }
